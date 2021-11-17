@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 
 
 
-def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_keep_going=True, plotnearby = False):
+def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_keep_going=True, plotnearby = False, observed = None):
     csvname = os.path.join('GIS', 'hydro_experiment', modelname, 'cokrig_wl_predict.csv')
     if not os.path.exists(csvname):
         print(f'exporting {csvname}')
@@ -33,10 +33,25 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
                                              inepsg='epsg:2226', outepsg='epsg:4326')
 
         nwp.do_plot(close_plot=False, input_long_lat=input_long_lat)
-        nwp.upleft.scatter(g.datetime, g.predicted.values,
+        nwp.upleft.scatter(g.datetime,
+                           g.predicted.values,
                            s=10, c='None',
                            edgecolors='b', zorder=20,
                            marker='.', label='Predicted')
+
+        if observed is None:
+            pass
+        else:
+            # print(observed.head())
+            # print(observed.columns)
+            # print(observed.filter(like = 'tation'))
+            cur = observed[observed.index == name]
+            print(f'shape of observed training data for {name},   {cur.shape[0]}')
+            nwp.upleft.scatter(cur.Timestamp,
+                               cur.loc[:,'Manual Measurement'].values,
+                               s=5, c='None',
+                               edgecolors='r', zorder=25,
+                               marker='o', label='Training Data')
 
         bbox_props = dict(boxstyle="Roundtooth,pad=0.3", fc="w", ec="b", lw=2)
         boxtext = f"{g.loc[:, 'welltype'].unique()[0]}"

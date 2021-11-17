@@ -2,7 +2,6 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-
 import conda_scripts.utils.krig_dataset as lgp
 import conda_scripts
 
@@ -12,7 +11,6 @@ import numpy as np
 import os
 import pickle
 
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn import preprocessing
 from pykrige.rk import RegressionKriging
 import sklearn.ensemble as ens_
@@ -25,12 +23,13 @@ from conda_scripts.utils.gwl_krig_preprocess import date2year_frac, date2date_fr
 import plot_hydros
 from sklearn.model_selection import train_test_split
 
+
 class krig_predict:
     '''
     krig datasets. uses inputs from kriging process
     '''
 
-    def __init__(self, train, option='universal', pred_col=None, add_weights = True, modweight = .5):
+    def __init__(self, train, option='universal', pred_col=None, add_weights=True, modweight=.5):
         '''
         import krigobject
         :param train: object from krig
@@ -58,7 +57,6 @@ class krig_predict:
         all_col.extend(xy_col)
         all_col.extend(targ_col)
 
-        self.pred_col = pred_col
         self.targ_col = targ_col
         self.all_col = all_col
         self.xy_col = xy_col
@@ -74,6 +72,23 @@ class krig_predict:
 
         self.modweight = modweight
 
+        if self.train.add_climate:
+            allin = all([x in pred_col for x in self.train.climate_cols])
+            if allin:
+                print('Climate variables already in pred_cols ')
+            else:
+                print('adding climate variables to prediciton columns b/c add_climate = True')
+                pred_col.extend(list(self.train.climate_cols))
+
+        self.pred_col = pred_col
+
+        self.predicted = None
+
+        self.description = f"modelname= {option}\n\
+        add_weights= {add_weights}\n\
+        mod_weight= {modweight}\n\
+        pred_col = {pred_col}\n"
+
         print(f"\nthe prediction columns are: {pred_col}\n")
 
     def setup_prediction(self, test_size=False):
@@ -84,42 +99,54 @@ class krig_predict:
             to include in the test split. If int, represents the absolute number of test samples.
         :return: x_train, p_train, target
         '''
-        print('\ndoing prediciton setup\n')
-        x_train, p_train, target,weights = conda_scripts.utils.regression_krig.setup_prediction(self.train.seas_info,
-                                                                                        pred_col=self.pred_col,
-                                                                                        targ_col=self.targ_col,
-                                                                                            modweight=self.modweight)
+        print('\ndoing prediction setup\n')
+        x_train, p_train, target, weights = conda_scripts.utils.regression_krig.setup_prediction(self.train.seas_info,
+                                                                                                 pred_col=self.pred_col,
+                                                                                                 targ_col=self.targ_col,
+                                                                                                 modweight=self.modweight)
 
         np.save(os.path.join('regression_data', 'x_train.npy'), x_train)
         np.save(os.path.join('regression_data', 'p_train.npy'), p_train)
         np.save(os.path.join('regression_data', 'target.npy'), target)
 
         if test_size > 0:
-            _, x_train, _, p_train, _, target,_,weights = train_test_split(x_train,
-                                                                p_train,
-                                                                target,
-                                                                weights,
-                                                                test_size=test_size,
-                                                                random_state=42)
+            x_test, x_train, p_test, p_train, target_test, target, test_weights, weights = train_test_split(
+                                                                             x_train,
+                                                                             p_train,
+                                                                             target,
+                                                                             weights,
+                                                                             test_size=test_size,
+                                                                             random_state=42)
 
             print(f'using {test_size} of all data for testing purposes\n' * 3)
 
         else:
             print('using the ENTIRE dataset for fitting purposes')
+            x_test, p_test, target_test, test_weights = None, None, None, None
+
 
         print(f"the shape of the inputs is {p_train.shape}\n\n\n")
 
         self.x_train = x_train
         self.p_train = p_train
         self.target = target
-        self.weights = weights
+        if self.add_weights:
+            self.weights = weights
+        else:
+            self.weights = None
 
-    def run_prediction(self):
+        self.x_test = x_test
+        self.p_test = p_test
+        self.target_test = target_test
+        self.test_weights = test_weights
+
+        if self.add_weights:
+            self.test_weights = test_weights
+        else:
+            self.test_weights = None
+
+    def run_fit(self):
         print('\n\nrunning predicitons!' * 3)
-        # if self.train.scale_data:
-        #     self.train.hydros_foldname = self.train.hydros_foldname + 'scale'
-        #     print('scaling data')
-
         print(self.train.hydros_foldname)
         try:
             os.mkdir(os.path.join('GIS', 'hydro_experiment', self.train.hydros_foldname))
@@ -131,42 +158,90 @@ class krig_predict:
 
             self.p_train_scaled = self.scaler.transform(self.p_train.copy())
 
-            if self.modelname.__contains__('regress_only') and self.add_weights:
-                print('adding weights to fitted model')
-                self.m_rk.fit(self.p_train_scaled, self.x_train, self.target, weights = self.weights)
-            else:
-                self.m_rk.fit(self.p_train_scaled, self.x_train, self.target)
+            self.p_test_scaled = self.scaler.transform(self.p_test.copy())
 
-            print('done fitting')
+            self.m_rk.fit(self.p_train_scaled, self.x_train, self.target, weights=self.weights)
+
+            score = self.m_rk.score(self.p_test_scaled, self.x_test, self.target_test)
+
+            [print(f'shape {xi.shape}') for xi in [self.p_train_scaled, self.x_train, self.target, self.weights]]
+
+            print('refitting with all data')
+            __allp = np.concatenate([self.p_train_scaled, self.p_test_scaled])
+            __allx = np.concatenate([self.x_train, self.x_test])
+            __allt = np.concatenate([self.target, self.target_test])
+
+            if self.add_weights:
+                __allweights = np.concatenate([self.weights, self.test_weights])
+            else:
+                __allweights = None
+
+            [print(f'shape {xi.shape}') for xi in [__allp, __allx, __allt, __allweights]]
+
+            self.m_rk.fit(__allp, __allx, __allt, weights=__allweights)
 
         else:
             self.scaler = None
-            if self.modelname.__contains__('regress_only') and self.add_weights:
-                print('adding weights to fitted model')
-                self.m_rk.fit(self.p_train, self.x_train, self.target, weights = self.weights)
-            else:
-                self.m_rk.fit(self.p_train, self.x_train, self.target)
+            # if self.modelname.__contains__('regress_only') and self.add_weights:
 
-        pickle_file = os.path.join('GIS', 'hydro_experiment', self.train.hydros_foldname, f'pikckleobj_trained_{self.train.basin}.pickle')
+            print('adding weights to fitted model')
+            self.m_rk.fit(self.p_train, self.x_train, self.target, weights=self.weights)
+
+            score = self.m_rk.score(self.p_test, self.x_test, self.target_test)
+
+        self.score = score
+        print(f"score is {score}")
+
+        pickle_file = os.path.join('GIS', 'hydro_experiment', self.train.hydros_foldname,
+                                   f'pikckleobj_trained_{self.train.basin}.pickle')
         pick = open(pickle_file, 'wb')
         print('saving pickle object')
         pickle.dump(self.m_rk, pick)
         pick.close()
 
-    def plot_predicted_hydros(self):
+    def run_prediction(self):
         rmp_hydro = rmp_hydros(train=self.train,
-                               pred_col = self.pred_col,
-                               basin = self.train.basin,
+                               pred_col=self.pred_col,
+                               basin=self.train.basin,
                                model=self.m_rk,
                                scaler=self.scaler,
-                               slope = self.train.use_slope)
+                               slope=self.train.use_slope,
+                               add_climate = self.train.add_climate,
+                               n_months=self.train.nmonths)
 
-        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, rmp_hydro, fancy=True)
+        # rmp_hydro = rmp_hydros(train=self.train,
+        #                        pred_col=self.pred_col,
+        #                        basin=self.train.basin,
+        #                        model=self.m_rk,
+        #                        scaler=self.scaler,
+        #                        slope=self.train.use_slope)
+        self.predicted = rmp_hydro
+
+    def plot_hydros(self, plot_train = False):
+        if plot_train:
+            observed = self.train.seas_info
+        else:
+            observed = None
+
+        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, self.predicted, observed = observed, fancy=True)
 
         print('done!\n' * 3)
 
 
-def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=False, monthly=True):
+    # def plot_predicted_hydros(self):
+    #     rmp_hydro = rmp_hydros(train=self.train,
+    #                            pred_col=self.pred_col,
+    #                            basin=self.train.basin,
+    #                            model=self.m_rk,
+    #                            scaler=self.scaler,
+    #                            slope=self.train.use_slope)
+    #
+    #     plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, rmp_hydro, fancy=True)
+    #
+    #     print('done!\n' * 3)
+
+
+def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=False, monthly=True, add_climate = True, n_months = 36):
     obs, fnames = load_rmp(train.allinfo)
 
     newname = fnames['SRP'].replace('.shp', '_402.shp')
@@ -176,12 +251,10 @@ def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=Fals
 
     unq_sites = obs.Site.unique()
     obs = obs[obs.Site == basin]
-    assert obs.shape[0]>0, f'bad filtering of rmp points with {basin}. options are \n{unq_sites}'
+    assert obs.shape[0] > 0, f'bad filtering of rmp points with {basin}. options are \n{unq_sites}'
 
     obs.loc[:, ['Station_Na', 'geometry']].to_file(newname)
     obs.loc[:, 'rasterelevation'] = obs.loc[:, ['TOC_Elevat', 'Well_TOC_E']].mean(axis=1)
-
-
 
     if slope:
         obs_slope = rs.point_query(newname, train.slope_tiff_elev)
@@ -213,6 +286,13 @@ def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=Fals
                     t.loc[:, 'year_frac'] = date2year_frac(t.loc[:, 'ts'], dayoffset=92)
                     dfall = dfall.append(t)
 
+    if add_climate:
+        import process_climate as pcr
+        climate = pcr.climate()
+        climate.resample_climate(n_months=n_months)
+        print('adding climate to prediction locations')
+        dfall = climate.add_climate_to_obs(dfall, column = 'ts')
+
     # p_pred = dfall.loc[:, pred_col].fillna(0.).values
     p_pred = dfall.loc[:, pred_col].fillna(0.).values
     x_pred = dfall.loc[:, ['Easting', 'Northing']].values
@@ -239,9 +319,9 @@ def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=Fals
         fitted = model.predict(p_pred_scaled, x_pred)
 
     dfall.loc[:, 'predicted'] = fitted
-    dfall.loc[:, 'datetime'] = pd.to_datetime(dfall.date_frac.apply(conda_scripts.utils.regression_krig.dec2dt))
+    # dfall.loc[:, 'datetime'] = pd.to_datetime(dfall.date_frac.apply(conda_scripts.utils.regression_krig.dec2dt))
 
-    dfall.loc[:, 'datetime'] = dfall.loc[:, 'datetime']
+    dfall.loc[:, 'datetime'] = dfall.loc[:, 'ts']
 
     print('done w predictions')
 
@@ -310,12 +390,92 @@ def set_model(m=None, option='a'):
                                  verbose=True)
     elif option == 'regress_only':
         m_rk = pure_regress_model()
+    elif option == 'adaboost':
+        m_rk = adaboost()
+    elif option == 'GradientBoostingRegressor':
+        m_rk = gradientboost()
 
 
     else:
         raise AssertionError(f"option {option} not found ")
 
     return m_rk
+
+class gradientboost:
+    '''
+    Fit the regression method
+
+    Parameters
+    ----------
+    p: ndarray
+    (Ns, d) array of predictor variables (Ns samples, d dimensions)
+    for regression
+    x: ndarray
+    ndarray of (x, y) points. Needs to be a (Ns, 2) array
+    corresponding to the lon/lat, for example 2d regression kriging.
+    array of Points, (x, y, z) pairs of shape (N, 3) for 3d kriging
+    y: ndarray
+    array of targets (Ns, )
+    '''
+
+    def __init__(self):
+        self.model = ens_.GradientBoostingRegressor(random_state=1)
+
+    def fit(self, p, x, y, weights=None):
+        print('concatenating inputs')
+        X = np.hstack([p, x])
+        print('fitting inputs')
+        self.model.fit(X, y, sample_weight=weights)
+        print('done fitting')
+
+    def predict(self, p_pred, xpred):
+        print('doing predictions...')
+        X_pred = np.hstack([p_pred, xpred])
+        pred = self.model.predict(X_pred)
+        print('done predicting')
+        return pred
+
+
+class adaboost:
+    '''
+    Fit the regression method
+
+    Parameters
+    ----------
+    p: ndarray
+    (Ns, d) array of predictor variables (Ns samples, d dimensions)
+    for regression
+    x: ndarray
+    ndarray of (x, y) points. Needs to be a (Ns, 2) array
+    corresponding to the lon/lat, for example 2d regression kriging.
+    array of Points, (x, y, z) pairs of shape (N, 3) for 3d kriging
+    y: ndarray
+    array of targets (Ns, )
+    '''
+
+    def __init__(self):
+        self.model = ens_.AdaBoostRegressor(random_state=1)
+
+    def fit(self, p, x, y, weights=None):
+        print('concatenating inputs')
+        X = np.hstack([p, x])
+        print('fitting inputs')
+        self.model.fit(X, y, sample_weight=weights)
+        print('done fitting')
+
+    def predict(self, p_pred, xpred):
+        print('doing predictions...')
+        X_pred = np.hstack([p_pred, xpred])
+        pred = self.model.predict(X_pred)
+        print('done predicting')
+        return pred
+
+
+def check_inputs(X):
+    if (np.isinf(X).any() or not np.isfinite(X).all()):
+        infsum = np.isinf(X).sum()
+        finsum = ~np.isfinite(X).sum()
+        raise ValueError(f"num inf: {infsum}\nnum not finite: {finsum}")
 
 class pure_regress_model:
     '''
@@ -334,23 +494,36 @@ class pure_regress_model:
     array of targets (Ns, )
     '''
 
-
     def __init__(self):
-        self.model = ens_.ExtraTreesRegressor(verbose = True,random_state=1)
+        self.model = ens_.ExtraTreesRegressor(verbose=True, random_state=1)
 
-    def fit(self,p,x,y, weights = None):
+    def fit(self, p, x, y, weights=None):
+        check_inputs(p)
+        check_inputs(x)
+        check_inputs(y)
         print('concatenating inputs')
         X = np.hstack([p, x])
         print('fitting inputs')
-        self.model.fit(X,y, sample_weight = weights)
+        self.model.fit(X, y, sample_weight=weights)
         print('done fitting')
 
     def predict(self, p_pred, xpred):
+        check_inputs(p_pred)
+        check_inputs(xpred)
         print('doing predictions...')
         X_pred = np.hstack([p_pred, xpred])
-        pred =  self.model.predict(X_pred)
+        pred = self.model.predict(X_pred)
         print('done predicting')
         return pred
+
+    def score(self,p, x, y):
+        print('concatenating inputs')
+        X = np.hstack([p, x])
+        print('fitting inputs')
+        score = self.model.score(X, y)
+        return score
+
+
 
 def categorize_depths_inputs(df, fillvalue='Other'):
     '''
@@ -452,11 +625,11 @@ def load_rmp(allinfo):
     tss = gpd.read_file(fnames["TSS"])
     tss = tss.to_crs(2226)
 
-    obs = obs.assign(welltype='SRP RMP').assign(Site = 'SRP')
-    sv = sv.assign(welltype='SV RMP').assign(Site = 'SON')
-    pv = pv.assign(welltype='PET RMP').assign(Site = 'PET')
-    swd = swd.assign(welltype='SWD RMP').assign(Site = 'SRP')
-    tss = tss.assign(welltype='TSS RMP').assign(Site = 'SRP')
+    obs = obs.assign(welltype='SRP RMP').assign(Site='SRP')
+    sv = sv.assign(welltype='SV RMP').assign(Site='SON')
+    pv = pv.assign(welltype='PET RMP').assign(Site='PET')
+    swd = swd.assign(welltype='SWD RMP').assign(Site='SRP')
+    tss = tss.assign(welltype='TSS RMP').assign(Site='SRP')
 
     obs = obs.append(sv).append(pv).append(swd).append(tss)
 
