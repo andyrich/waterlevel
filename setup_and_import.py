@@ -28,8 +28,8 @@ class Krig:
     def __init__(self, add_modeled = False,
                 monthlytimestep = 18,
                  scale_data=False,
-                filename_base = 'foldername',
-                load_old_elev = True,
+                 filename_base = 'foldername',
+                 load_old_elev = True,
                  deep_categories = True,
                  slope_tiff_elev = r'C:\GIS\raster\DEM\sgdem_slope_402.tif',
                  elev_tiff_elev = r'C:\GIS\raster\DEM\sgmdemuncl_test1.tif',
@@ -40,7 +40,8 @@ class Krig:
                  basin="SRP",
                  dayoffset = 92,
                  deeplayer = 3,
-                 add_climate = False,
+                 add_climate = True,
+                 add_temp = True,
                  nmonths = 36):
 
         print(f"pykrige version:{pykrige.__version__}")
@@ -61,9 +62,10 @@ class Krig:
 
         self.add_climate = add_climate
         self.climate_cols = None
+        self.add_temp = add_temp
         self.nmonths = nmonths
 
-        assert basin in ['SRP', 'SON', 'PET'], 'wrong option for basin name, should be SRP, Son, or PET'
+        assert basin in ['SRP', 'SON', 'PET'], 'wrong option for basin name, should be SRP, SON, or PET'
         self.basin = basin
 
         self.dayoffset = dayoffset
@@ -105,9 +107,8 @@ class Krig:
         add_geology = {add_geology}\n\
         add_geophys = {add_geophys}\n\
         climate = {add_climate}\n\
+        add_temp = {add_temp}\n\
         nmonths = {nmonths}\n"
-
-
 
         assert os.path.exists('T:\\'), 'need to connect to SCWA computers'
         assert os.path.exists('S:\\'), 'need to connect to SCWA computers'
@@ -238,19 +239,30 @@ class Krig:
     def process_climate(self):
         if self.add_climate:
             import process_climate as pcr
-            climate = pcr.climate()
+            climate = pcr.climate(precip=True)
             climate.resample_climate(n_months = self.nmonths)
-            print(f'adding climate to observation data. using {self.nmonths}')
+            print(f'adding precip to observation data. using {self.nmonths}')
             self.all_obs = climate.add_climate_to_obs(self.all_obs, column = 'Timestamp')
             self.climate_cols = climate.climate_cols
         else:
             pass
 
+        if self.add_temp:
+            import process_climate as pcr
+            climate = pcr.climate(precip=False)
+            climate.resample_climate(n_months = self.nmonths)
+            print(f'adding temperature to observation data. using {self.nmonths}')
+            self.all_obs = climate.add_climate_to_obs(self.all_obs, column = 'Timestamp')
+            self.climate_cols.extend( climate.climate_cols)
+
     def export_processed_ts(self):
         self.all_obs.to_csv(os.path.join('regression_data',f'all_gw_for_surf_processed_{self.basin}.csv'))
 
 
-    def filter_and_export_shp(self, filt_str = ['Santa', 'Sonoma', 'Peta']):
+    def filter_and_export_shp(self, filt_str=None):
+        if filt_str is None:
+            filt_str = ['Santa', 'Sonoma', 'Peta']
+
         print('\n\nfiltering stations and exporting shapefile')
         filename = 'wiski_wells_v3.shp'
         wells_shp = os.path.join(self.outfolder_data, filename)

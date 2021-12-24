@@ -14,6 +14,7 @@ import geopandas as gpd
 from conda_scripts.utils.gwl_krig_preprocess import date2year_frac, date2date_frac
 import textwrap
 from sklearn.metrics import mean_squared_error
+import process_climate as pcr
 
 import xarray as xr
 
@@ -40,7 +41,18 @@ class MapGW:
 
         print(self.description)
 
-    def plotmap(self, yearstep=3, seasons=['Spring', 'Fall'], plot_residuals=False):
+    def plotmap(self, yearstep=3, seasons=None, plot_residuals=False, netcdf_only = False):
+        '''
+        perform map projections for years/seasons noted
+        :param yearstep: can be step (int) or range of years to plot
+        :param seasons: ['Deep', 'Shallow']
+        :param plot_residuals: plot residuals on map
+        :param netcdf_only: skip map plotting and save only netcdf
+        :return:
+        '''
+
+        if seasons is None:
+            seasons = ['Spring', 'Fall']
 
         print(f"saving maps to {os.path.join(self.path, self.train_input.map_foldername)}")
         try:
@@ -78,7 +90,13 @@ class MapGW:
                                       smooth=self.smooth,
                                       dayoffset=self.train_input.dayoffset,
                                       add_climate=self.train_input.add_climate,
-                                      n_months=self.train_input.nmonths)
+                                      n_months=self.train_input.nmonths,
+                                      add_temp=self.train_input.add_temp)
+
+                        if netcdf_only:
+                            first.save_prediction(first.grid_z2, year, deep, season)
+                            print('skipping plotting and only saving netcdf outputs')
+                            continue
 
                         ax = first.map_it(calc=True,
                                           plot_points=True,
@@ -109,6 +127,11 @@ class MapGW:
                             mod_gdf = seas_gdf[(seas_gdf.index.str.contains('mod'))]
                             # observed points
                             seas_gdf = seas_gdf[~(seas_gdf.index.str.contains('mod'))]
+
+                            # check if seas_gdf is empty
+                            if seas_gdf.shape[0]==0:
+                                continue
+
                             print('removing duplicated points at observation locations.... kinda crudely')
                             seas_gdf = limit_duplicates(seas_gdf)
 
@@ -121,7 +144,8 @@ class MapGW:
                             seas_gdf.loc[:, 'Residual'] = seas_gdf.loc[:, 'Observations'] - seas_gdf.loc[:, 'predicted']
 
                             seas_gdf.loc[:, 'label'] = seas_gdf.apply(
-                                lambda x: "{:.0f} ({:+.0f})".format(x['Observations'], x['Residual']), axis=1)
+                                lambda x: "{:.0f} ({:+.0f})".format(x['Observations'],
+                                                                    x['Residual']), axis=1)
 
                             seas_gdf.plot(ax=ax, color='k', markersize=5)
 
@@ -194,7 +218,7 @@ class PlotContour(object):
 
 
     def predict(self, elev, pred_col, year_predict, season, scale_data=False, scaler=None, depth_type=None,
-                smooth=False, dayoffset=92, add_climate=False, n_months=36 ):
+                smooth=False, dayoffset=92, add_climate=False, add_temp = True, n_months=36 ):
         '''
 
         :param elev:
@@ -221,7 +245,7 @@ class PlotContour(object):
 
         # add columns to elev
         out_predict = addcol2elev(df_elev, pred_col, year=year_predict, month=months(season), shallow=depth_type,
-                                  dayoffset=dayoffset, add_climate=add_climate, n_months=n_months)
+                                  dayoffset=dayoffset, add_climate=add_climate, add_temp=add_temp, n_months=n_months)
         out_predict = out_predict.loc[:, pred_col]
         print(out_predict.head(1))
 
@@ -285,7 +309,6 @@ class PlotContour(object):
 
         :param year:
         :param season:
-        :param grid_z2:
         :return:
         '''
         # easting, northing = np.meshgrid(self.x_stp, self.y_stp)
@@ -309,11 +332,15 @@ class PlotContour(object):
 
             b = self.predictions.sel(dict(depth=v, season=i))
             b = b.sortby('year')
-            b = b.diff(dim = 'year')
+            filename = os.path.join(path, self.foldername,
+                                    f'wl_predictions_{v}_{i}.netcdf')
+            print(f'saving simulated heads netcdf to {filename}')
+            b.to_netcdf(filename)
 
+            b = b.diff(dim = 'year')
             filename = os.path.join(path, self.foldername,
                                     f'wl_change_predictions_{v}_{i}.netcdf')
-            print(f"saving to {filename}")
+            print(f"saving WL changes netcdf to {filename}")
             print(b)
             b.to_netcdf(filename)
 
@@ -339,7 +366,7 @@ def make_xr(array, year, depth, season, easting, northing):
     #     return ds
 
 
-def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, add_climate=False, n_months=36):
+def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, add_climate=False, add_temp=False, n_months=36):
     #     year_frac = np.float(year_frac)
     df = elev.copy()
     assert month > 0 and month < 13, 'year_frac must be between 1 and 12'
@@ -353,10 +380,15 @@ def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, ad
         df.loc[:, 'Deep'] = 1
 
     if add_climate:
-        import process_climate as pcr
         climate = pcr.climate()
         climate.resample_climate(n_months=n_months)
         print('adding climate to prediction locations')
+        df = climate.add_climate_to_obs(df)
+
+    if add_temp:
+        climate = pcr.climate(precip=False)
+        climate.resample_climate(n_months=n_months)
+        print(f'adding temperature to observation data. using {n_months}')
         df = climate.add_climate_to_obs(df)
 
     df = df.rename(columns={'RASTERVALU': "rasterelevation"})
@@ -364,7 +396,9 @@ def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, ad
     return df.loc[:, pred_col]
 
 
-def label_points(ax, gdf, colname, basin_name=["SRP"], kwds_dict={}, buffer=None, limit=20, already_str=False):
+def label_points(ax, gdf, colname, basin_name=None, buffer=None, limit=20, already_str=False):
+    if basin_name is None:
+        basin_name = ["SRP"]
     from adjustText import adjust_text
     bas = rich_gis.get_active_subbasins()
 

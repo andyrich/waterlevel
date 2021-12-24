@@ -1,7 +1,7 @@
 import warnings
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+import process_climate as pcr
 import conda_scripts.utils.krig_dataset as lgp
 import conda_scripts
 
@@ -83,6 +83,7 @@ class krig_predict:
         self.pred_col = pred_col
 
         self.predicted = None
+        self.fitted_obs = None
 
         self.description = f"modelname= {option}\n\
         add_weights= {add_weights}\n\
@@ -111,19 +112,17 @@ class krig_predict:
 
         if test_size > 0:
             x_test, x_train, p_test, p_train, target_test, target, test_weights, weights = train_test_split(
-                                                                             x_train,
-                                                                             p_train,
-                                                                             target,
-                                                                             weights,
-                                                                             test_size=test_size,
-                                                                             random_state=42)
+                x_train,
+                p_train,
+                target,
+                weights,
+                test_size=test_size,
+                random_state=42)
 
-            print(f'using {test_size} of all data for testing purposes\n' * 3)
-
+            print(f'using {test_size} of all data for testing purposes' * 3)
         else:
             print('using the ENTIRE dataset for fitting purposes')
             x_test, p_test, target_test, test_weights = None, None, None, None
-
 
         print(f"the shape of the inputs is {p_train.shape}\n\n\n")
 
@@ -180,6 +179,7 @@ class krig_predict:
 
             self.m_rk.fit(__allp, __allx, __allt, weights=__allweights)
 
+
         else:
             self.scaler = None
             # if self.modelname.__contains__('regress_only') and self.add_weights:
@@ -199,49 +199,54 @@ class krig_predict:
         pickle.dump(self.m_rk, pick)
         pick.close()
 
-    def run_prediction(self):
-        rmp_hydro = rmp_hydros(train=self.train,
-                               pred_col=self.pred_col,
-                               basin=self.train.basin,
-                               model=self.m_rk,
-                               scaler=self.scaler,
-                               slope=self.train.use_slope,
-                               add_climate = self.train.add_climate,
-                               n_months=self.train.nmonths)
+    def export_predicted(self):
+        df = self.train.seas_info.copy()
 
-        # rmp_hydro = rmp_hydros(train=self.train,
-        #                        pred_col=self.pred_col,
-        #                        basin=self.train.basin,
-        #                        model=self.m_rk,
-        #                        scaler=self.scaler,
-        #                        slope=self.train.use_slope)
+        x_train, p_train, target, weights = conda_scripts.utils.regression_krig.setup_prediction(self.train.seas_info,
+                                                                                                 pred_col=self.pred_col,
+                                                                                                 targ_col=self.targ_col,
+                                                                                                 modweight=self.modweight)
+
+        p_train = self.scaler.transform(p_train)
+
+        fitted = self.m_rk.predict(p_train, x_train)
+
+        df.loc[:,'predicted'] = fitted
+
+        csv = os.path.join('GIS', 'hydro_experiment', self.train.hydros_foldname,
+                                   f'seasinfo_w_predicted_{self.train.basin}.csv')
+        print(f'exporting seas_info with predicted values to {csv}')
+        df.to_csv(csv)
+        print('done\n')
+
+    def run_prediction_for_hydros(self):
+        rmp_hydro = predict_rmp_hydros(train=self.train,
+                                       pred_col=self.pred_col,
+                                       basin=self.train.basin,
+                                       model=self.m_rk,
+                                       scaler=self.scaler,
+                                       slope=self.train.use_slope,
+                                       add_climate=self.train.add_climate,
+                                       n_months=self.train.nmonths,
+                                       dayoffset=self.train.dayoffset,
+                                       add_temp=self.train.add_temp)
+
         self.predicted = rmp_hydro
 
-    def plot_hydros(self, plot_train = False):
+    def plot_hydros(self, plot_train=False):
         if plot_train:
             observed = self.train.seas_info
         else:
             observed = None
 
-        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, self.predicted, observed = observed, fancy=True)
+        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, self.predicted, observed=observed, fancy=True)
 
         print('done!\n' * 3)
 
 
-    # def plot_predicted_hydros(self):
-    #     rmp_hydro = rmp_hydros(train=self.train,
-    #                            pred_col=self.pred_col,
-    #                            basin=self.train.basin,
-    #                            model=self.m_rk,
-    #                            scaler=self.scaler,
-    #                            slope=self.train.use_slope)
-    #
-    #     plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, rmp_hydro, fancy=True)
-    #
-    #     print('done!\n' * 3)
-
-
-def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=False, monthly=True, add_climate = True, n_months = 36):
+def predict_rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=False,
+                       monthly=True, add_climate=True, n_months=36,
+                       dayoffset=30, add_temp=True):
     obs, fnames = load_rmp(train.allinfo)
 
     newname = fnames['SRP'].replace('.shp', '_402.shp')
@@ -267,31 +272,36 @@ def rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, slope=Fals
     #### adding geophysical data here
     obs = lgp.do_krig_all(obs, obs.loc[:, 'Easting'], obs.loc[:, 'Northing'])
     obs = train.geol.add_geol_to_gdf(obs)
-    print('adjusting datetime by adjusting forward 92 days')
+    print(f'adjusting datetime by adjusting forward {dayoffset} days')
     base_df = obs.drop_duplicates(['Easting', 'Northing'])
     dfall = pd.DataFrame()
     for year in np.arange(1975, 2022):
         if monthly:
-            for month_ in np.arange(1, 12):
+            for month_ in np.arange(1, 13):
                 t = base_df.copy()
                 t.loc[:, 'ts'] = pd.datetime(year, month_, 1)
-                t.loc[:, 'date_frac'] = date2date_frac(t.loc[:, 'ts'], dayoffset=92)
-                t.loc[:, 'year_frac'] = date2year_frac(t.loc[:, 'ts'], dayoffset=92)
+                t.loc[:, 'date_frac'] = date2date_frac(t.loc[:, 'ts'], dayoffset=dayoffset)
+                t.loc[:, 'year_frac'] = date2year_frac(t.loc[:, 'ts'], dayoffset=dayoffset)
                 dfall = dfall.append(t)
             else:
                 for month_ in [4, 10]:
                     t = base_df.copy()
                     t.loc[:, 'ts'] = pd.datetime(year, month_, 1)
-                    t.loc[:, 'date_frac'] = date2date_frac(t.loc[:, 'ts'], dayoffset=92)
-                    t.loc[:, 'year_frac'] = date2year_frac(t.loc[:, 'ts'], dayoffset=92)
+                    t.loc[:, 'date_frac'] = date2date_frac(t.loc[:, 'ts'], dayoffset=dayoffset)
+                    t.loc[:, 'year_frac'] = date2year_frac(t.loc[:, 'ts'], dayoffset=dayoffset)
                     dfall = dfall.append(t)
 
     if add_climate:
-        import process_climate as pcr
-        climate = pcr.climate()
+        climate = pcr.climate(precip=True)
         climate.resample_climate(n_months=n_months)
         print('adding climate to prediction locations')
-        dfall = climate.add_climate_to_obs(dfall, column = 'ts')
+        dfall = climate.add_climate_to_obs(dfall, column='ts')
+
+    if add_temp:
+        climate = pcr.climate(precip=False)
+        climate.resample_climate(n_months=n_months)
+        print(f'adding temperature to observation data. using {n_months}')
+        dfall = climate.add_climate_to_obs(dfall, column='ts')
 
     # p_pred = dfall.loc[:, pred_col].fillna(0.).values
     p_pred = dfall.loc[:, pred_col].fillna(0.).values
@@ -401,6 +411,7 @@ def set_model(m=None, option='a'):
 
     return m_rk
 
+
 class gradientboost:
     '''
     Fit the regression method
@@ -477,6 +488,7 @@ def check_inputs(X):
         finsum = ~np.isfinite(X).sum()
         raise ValueError(f"num inf: {infsum}\nnum not finite: {finsum}")
 
+
 class pure_regress_model:
     '''
     Fit the regression method
@@ -516,13 +528,12 @@ class pure_regress_model:
         print('done predicting')
         return pred
 
-    def score(self,p, x, y):
+    def score(self, p, x, y):
         print('concatenating inputs')
         X = np.hstack([p, x])
         print('fitting inputs')
         score = self.model.score(X, y)
         return score
-
 
 
 def categorize_depths_inputs(df, fillvalue='Other'):

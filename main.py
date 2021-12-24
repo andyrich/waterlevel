@@ -4,30 +4,41 @@ import setup_and_import
 import predict
 import pickle
 import warnings
+import basin_setup
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DeprecationWarning)
 basin = "SRP"
-filename_base = f'_FINALv8_{basin}_allmodmonths'
-# filename_base = f'_FINAL_refractor_{basin}_regressonly_smoothed_wweightspt05_30daysoff_geol_model_v6'
-# filename_base = f'_refractor_{basin}_basedataonly_v2'
-# filename_base = f'_refractor_{basin}_only_scaled_v1'
-# filename_base = '___test'
+filename_base = f'_FINALv2_{basin}_allmodmonths_wtemp_pt25modweight'
+# filename_base = 'temp'
+filename_base, smooth, smooth_value, modweight, add_modeled, \
+monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
+deeplayer, add_temp, add_climate = \
+    basin_setup.basin_info(filename_base,basin)
 
-reload = False
-smooth = False
-# smooth_value = .25
-smooth_value = {'SRP':.25,'SON':.5}[basin]
-modweight=.05
-add_modeled = True
-nmonths = 120
 
+# # filename_base = f'_FINAL_refractor_{basin}_regressonly_smoothed_wweightspt05_30daysoff_geol_model_v6'
+# # filename_base = f'_refractor_{basin}_basedataonly_v2'
+# # filename_base = f'_refractor_{basin}_only_scaled_v1'
+# # filename_base = '___test'
+#
+
+# smooth = False
+# # smooth_value = .25
+# smooth_value = {'SRP':.25,'SON':.5}[basin]
+# modweight=.05
+# add_modeled = True
+# nmonths = 120
+#
+# modeltype = 'regress_only'
+# # modeltype = "GradientBoostingRegressor"
+# monthlytimestep = 1
+
+reload = True
 plot_all = False
-years = np.arange(1980,2022,1)
+netcdf_only = False
+years = np.arange(1970,2022,1)
 
-modeltype = 'regress_only'
-# modeltype = "GradientBoostingRegressor"
-monthlytimestep = 1
 
 if reload:
     with open(f'regression_data\\krig_pickle_obj_{basin}.pickle','rb') as pick:
@@ -42,11 +53,12 @@ else:
     krigobj = setup_and_import.Krig(add_modeled = add_modeled,
                                     monthlytimestep = monthlytimestep,
                                     filename_base = filename_base,
-                                    scale_data = True,
+                                    scale_data = scale_data,
                                     basin = basin,
-                                    dayoffset=30,
-                                    deeplayer = 2,
-                                    add_climate = True,
+                                    dayoffset=dayoffset,
+                                    deeplayer = deeplayer,
+                                    add_climate = add_climate,
+                                    add_temp=add_temp,
                                     plot_all=plot_all,
                                     nmonths=nmonths)
 
@@ -99,17 +111,16 @@ pred = predict.krig_predict(krigobj, pred_col=pred_col, option=modeltype, modwei
 pred.setup_prediction(test_size = .8)
 
 pred.run_fit()
-pred.run_prediction()
-pred.plot_hydros(plot_train=False)
+pred.export_predicted()
 
+pred.run_prediction_for_hydros()
+pred.plot_hydros(plot_train=False)
 
 # #### maps
 import project2d
 gwmap = project2d.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
 
-
-
-gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'], plot_residuals = True)
+gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'], plot_residuals = True, netcdf_only=netcdf_only)
 
 
 # #### maps

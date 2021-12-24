@@ -7,17 +7,27 @@ class climate:
     make an object that can be used to merge climate data with the observations
     '''
 
-    def __init__(self):
-        climate = plot_wet.load_precip()
-        climate = climate.mean(axis=1).to_frame('Precip')
+    def __init__(self, precip = True):
+
+        if precip:
+            climate = plot_wet.load_precip()
+            climate = climate.mean(axis=1).to_frame('Precip')
+            self._col = 'precip'
+        else:
+            climate = plot_wet.load_climate()
+            climate = climate.loc[:, ('SRP', 'tmean')] - climate.loc[:, ('SRP', 'tmean')].mean()
+            climate = climate.to_frame('tmean')
+            self._col = 'tmean_anom'
+
         self.climate = climate
         self.climate_resampled = None
         self.climate_cols = None
+        self.precip = precip
 
     def get_clim(self, df):
         d = df.resample('12M', closed='left').sum().cumsum()
         d = d.T
-        cols = [f'clim{ij}' for ij in range(d.shape[1])]
+        cols = [f'{self._col}{ij}' for ij in range(d.shape[1])]
 
         d.columns = cols
         return d
@@ -34,7 +44,7 @@ class climate:
         xnew.index = xnew.index + pd.tseries.offsets.MonthBegin()
 
         self.climate_resampled = xnew
-        self.climate_cols = xnew.columns
+        self.climate_cols = list(xnew.columns)
 
     def add_climate_to_obs(self, df, column = 'Date'):
         assert column in df.columns, f'{column} columns is not in df\n{df.columns}'
