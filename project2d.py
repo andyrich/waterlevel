@@ -41,7 +41,7 @@ class MapGW:
 
         print(self.description)
 
-    def plotmap(self, yearstep=3, seasons=None, plot_residuals=False, netcdf_only = False):
+    def plotmap(self, yearstep=3, seasons=None, plot_residuals=False, netcdf_only=False):
         '''
         perform map projections for years/seasons noted
         :param yearstep: can be step (int) or range of years to plot
@@ -116,22 +116,25 @@ class MapGW:
                         filename = os.path.join(self.path, self.train_input.map_foldername,
                                                 f'{bas}_{year}_{first.season}_{deep}.png')
 
-                        # add points to map
                         if seas_gdf is None:
-                            print(f"{year}-{season}  is not in the columns... ie is not covered by observations\n\n")
+                            print(f"{year}-{season}--{deep} is not in the columns... ie is not covered by observations\n\n")
 
                         else:
-
                             seas_gdf = seas_gdf.to_crs(2226)
                             # modeled points
-                            mod_gdf = seas_gdf[(seas_gdf.index.str.contains('mod'))]
+                            # mod_gdf = seas_gdf[(seas_gdf.index.str.contains('mod'))]
                             # observed points
                             seas_gdf = seas_gdf[~(seas_gdf.index.str.contains('mod'))]
 
-                            # check if seas_gdf is empty
-                            if seas_gdf.shape[0]==0:
-                                continue
+                            if seas_gdf.shape[0] == 0:
+                                seas_gdf = None
 
+                        if seas_gdf is None:
+                            print(f'there are no observation points for {year} {season} {deep}')
+                            pass  # if there are no points to add to map, continue
+                        else:
+                            # add points to map
+                            print(f'adding observation points for {year} {season} {deep}')
                             print('removing duplicated points at observation locations.... kinda crudely')
                             seas_gdf = limit_duplicates(seas_gdf)
 
@@ -207,18 +210,15 @@ class MapGW:
         return first
 
 
-
-
 class PlotContour(object):
-    def __init__(self, m_rk,  foldername):
+    def __init__(self, m_rk, foldername):
 
         self.m_rk = m_rk
         self.predictions = None
         self.foldername = foldername
 
-
     def predict(self, elev, pred_col, year_predict, season, scale_data=False, scaler=None, depth_type=None,
-                smooth=False, dayoffset=92, add_climate=False, add_temp = True, n_months=36 ):
+                smooth=False, dayoffset=92, add_climate=False, add_temp=True, n_months=36):
         '''
 
         :param elev:
@@ -236,7 +236,6 @@ class PlotContour(object):
         '''
         # setup points for running prediction
         df_elev = elev.copy()
-
 
         self.year_frac = months(season)
         self.year_predict = year_predict
@@ -272,7 +271,7 @@ class PlotContour(object):
         self.x_stp, self.y_stp = dfgrid.columns.values, dfgrid.index.values
 
     def map_it(self, calc=True, plot_points=True,
-               contours=(0,10,20,30,40), locname="PV",
+               contours=(0, 10, 20, 30, 40), locname="PV",
                label_contour=True, crs=ccrs.epsg(3857),
                maptype='ctx.OpenStreetMap.Mapnik'):
 
@@ -321,9 +320,7 @@ class PlotContour(object):
             self.predictions = ds
         else:
             print('concatenating predictions')
-            self.predictions = xr.concat([self.predictions, ds], dim = 'time')
-
-
+            self.predictions = xr.concat([self.predictions, ds], dim='time')
 
     def export_prediction(self, path):
         vals = pd.MultiIndex.from_product([['Deep', 'Shallow'], ['Fall', 'Spring']])
@@ -337,7 +334,7 @@ class PlotContour(object):
             print(f'saving simulated heads netcdf to {filename}')
             b.to_netcdf(filename)
 
-            b = b.diff(dim = 'year')
+            b = b.diff(dim='year')
             filename = os.path.join(path, self.foldername,
                                     f'wl_change_predictions_{v}_{i}.netcdf')
             print(f"saving WL changes netcdf to {filename}")
@@ -366,7 +363,8 @@ def make_xr(array, year, depth, season, easting, northing):
     #     return ds
 
 
-def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, add_climate=False, add_temp=False, n_months=36):
+def addcol2elev(elev, pred_col, year, month, shallow='Shallow', dayoffset=92, add_climate=False, add_temp=False,
+                n_months=36):
     #     year_frac = np.float(year_frac)
     df = elev.copy()
     assert month > 0 and month < 13, 'year_frac must be between 1 and 12'

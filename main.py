@@ -8,36 +8,20 @@ import basin_setup
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DeprecationWarning)
-basin = "SRP"
-filename_base = f'_FINALv2_{basin}_allmodmonths_wtemp_pt25modweight'
+basin = "PET"
+filename_base = f'_v3_{basin}_allmodmonths_wtemp_editdata_manual_only_observed_to_2021'
 # filename_base = 'temp'
 filename_base, smooth, smooth_value, modweight, add_modeled, \
 monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
-deeplayer, add_temp, add_climate = \
+deeplayer, add_temp, add_climate, filter_manual, obs_filename, xysteps = \
     basin_setup.basin_info(filename_base,basin)
 
-
-# # filename_base = f'_FINAL_refractor_{basin}_regressonly_smoothed_wweightspt05_30daysoff_geol_model_v6'
-# # filename_base = f'_refractor_{basin}_basedataonly_v2'
-# # filename_base = f'_refractor_{basin}_only_scaled_v1'
-# # filename_base = '___test'
-#
-
-# smooth = False
-# # smooth_value = .25
-# smooth_value = {'SRP':.25,'SON':.5}[basin]
-# modweight=.05
-# add_modeled = True
-# nmonths = 120
-#
-# modeltype = 'regress_only'
-# # modeltype = "GradientBoostingRegressor"
-# monthlytimestep = 1
 
 reload = True
 plot_all = False
 netcdf_only = False
 years = np.arange(1970,2022,1)
+
 
 
 if reload:
@@ -57,10 +41,13 @@ else:
                                     basin = basin,
                                     dayoffset=dayoffset,
                                     deeplayer = deeplayer,
+                                    xysteps = xysteps,
                                     add_climate = add_climate,
                                     add_temp=add_temp,
                                     plot_all=plot_all,
-                                    nmonths=nmonths)
+                                    nmonths=nmonths,
+                                    filter_manual = filter_manual,
+                                    obs_filename = obs_filename)
 
     krigobj.load_obs()
 
@@ -68,7 +55,7 @@ else:
 
     krigobj.export_processed_ts()
 
-    krigobj.filter_and_export_shp()
+    krigobj.filter_and_export_shp(allow_missing=True)
 
     # # keep observed elevations of observations (do not use DEM values)
     krigobj.add_krig_values()
@@ -81,7 +68,7 @@ else:
 
     krigobj.load_elev_pred()
 
-    krigobj.add_geophys_geol()
+    krigobj.add_geophys_geol(pre_export=True)
 
     krigobj.categorize_depths()
 
@@ -114,13 +101,14 @@ pred.run_fit()
 pred.export_predicted()
 
 pred.run_prediction_for_hydros()
-pred.plot_hydros(plot_train=False)
+# pred.plot_hydros(plot_train=False)
 
 # #### maps
 import project2d
 gwmap = project2d.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
 
-gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'], plot_residuals = True, netcdf_only=netcdf_only)
+gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'],
+              plot_residuals = True, netcdf_only=netcdf_only)
 
 
 # #### maps

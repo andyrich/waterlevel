@@ -1,6 +1,6 @@
 import warnings
 
-import process_climate
+# import process_climate
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -18,7 +18,7 @@ import os
 import seaborn as sns
 
 import geopandas as gpd
-import pykrige
+# import pykrige
 
 import contextily as ctx
 
@@ -40,11 +40,12 @@ class Krig:
                  basin="SRP",
                  dayoffset = 92,
                  deeplayer = 3,
+                 xysteps = 12,
                  add_climate = True,
                  add_temp = True,
-                 nmonths = 36):
-
-        print(f"pykrige version:{pykrige.__version__}")
+                 filter_manual = False,
+                 nmonths = 36,
+                 obs_filename = 'all_gw_for_surf_2022.csv'):
 
         self.add_modeled = add_modeled
         self.monthlytimestep = monthlytimestep #of the SRPHM/SVIGM etc
@@ -59,22 +60,25 @@ class Krig:
         self.add_geophys = add_geophys
 
         self.deeplayer = deeplayer
+        self.xysteps = xysteps
 
         self.add_climate = add_climate
         self.climate_cols = None
         self.add_temp = add_temp
         self.nmonths = nmonths
+        self.filter_manual = filter_manual
+        self.obs_filename = obs_filename
 
         assert basin in ['SRP', 'SON', 'PET'], 'wrong option for basin name, should be SRP, SON, or PET'
         self.basin = basin
 
         self.dayoffset = dayoffset
 
-        day = pd.to_datetime('now').strftime('%Y%m%d')
-        base = day + filename_base
+        # day = pd.to_datetime('now').strftime('%Y%m%d')
+        # base = day + filename_base
 
-        self.map_foldername = 'maps_' + base
-        self.hydros_foldname = 'hydros_' + base
+        self.map_foldername = 'maps_' + filename_base
+        self.hydros_foldname = 'hydros_' + filename_base
         print(self.map_foldername)
 
         if slope_tiff_elev is None:
@@ -108,7 +112,9 @@ class Krig:
         add_geophys = {add_geophys}\n\
         climate = {add_climate}\n\
         add_temp = {add_temp}\n\
-        nmonths = {nmonths}\n"
+        nmonths = {nmonths}\n\
+        obs_filename = {obs_filename}\n\
+        filter_manual = {filter_manual}\n"
 
         assert os.path.exists('T:\\'), 'need to connect to SCWA computers'
         assert os.path.exists('S:\\'), 'need to connect to SCWA computers'
@@ -126,34 +132,36 @@ class Krig:
         #
         # The station data is downloaded direclty from wiski using their web service.
         #
+        # TODO - remove filter of observations 50ft bgs
         print('\n\nloading data')
         # # collect all of the station info here:
         allinfo = conda_scripts.utils.gwl_krig_preprocess.collect_station_info()
 
         allinfo.to_excel(os.path.join(r"C:\GSP\waterlevel\temp",'info.xlsx'))
 
+
         #check for missing stations
-        missing = pd.Series(['SRP0129' ,'SRP0140','SRP0148', 'SRP0154' ,'SRP0157' ,'SRP0164', 'SRP0166',
-        'SRP0171' ,'SRP0178' ,'SRP0187' ,'SRP0226', 'SRP0723'])
-        assert missing.isin(allinfo.loc[:,'Station Name']).all(), missing[~missing.isin(allinfo)]
+        # missing = pd.Series(['SRP0129' ,'SRP0140','SRP0148', 'SRP0154' ,'SRP0157' ,'SRP0164', 'SRP0166',
+        # 'SRP0171' ,'SRP0178' ,'SRP0187' ,'SRP0226', 'SRP0723'])
+        # assert missing.isin(allinfo.loc[:,'Station Name']).all(), missing[~missing.isin(allinfo)]
 
         allinfo.loc[:, 'Site Number'] = allinfo.loc[:,'Site Number'].fillna('ss').str.upper()
 
         allinfo = allinfo[allinfo.loc[:,'Site Number'].isin(pd.Series(self.basin))]
 
-        assert allinfo.shape[0]>0, 'allinfo shape is zero after filtering for basin'
+        # assert allinfo.shape[0]>0, 'allinfo shape is zero after filtering for basin'
 
 
         # # add location data to wells where it is missing. use lat/lon to give easting/northing and vice versa
         allinfo = conda_scripts.utils.gwl_krig_preprocess.add_stat_loc(allinfo)
 
-        # check for missing stations
-        assert missing.isin(allinfo.loc[:,'Station Name']).all(), missing[~missing.isin(allinfo)]
+        # # check for missing stations
+        # assert missing.isin(allinfo.loc[:,'Station Name']).all(), missing[~missing.isin(allinfo)]
 
         # # load all gw level data.
         # #### if this hasn't been done recently, do this. otherwise can be skipped and just import data from csv instead
         outfolder = 'regression_data'
-        maindf = load_all_gw_wiski.load_all_gw(download=False, outfolder=outfolder)
+        maindf = load_all_gw_wiski.load_all_gw(download=False, outfolder=outfolder, filter_manual = self.filter_manual, outfile = self.obs_filename)
 
         # print(maindf.filter(like='Site').head())
 
@@ -172,9 +180,6 @@ class Krig:
                 plt.savefig(os.path.join('temp plots', f'year{name}'+'.png'))
                 # plt.close(fig)
                 plt.close('all')
-
-                # break
-
 
 
         maindf.loc[:, 'Manual Measurement'] = pd.to_numeric(maindf.loc[:, 'Manual Measurement'], errors = 'coerce')
@@ -213,7 +218,8 @@ class Krig:
 
             modheads_allinfo, modheads_stat_info_wisk, \
             modheads_stations, modheads_all_obs = self.__extract_model_data(deeplayer = self.deeplayer,
-                                                                            monthlytimestep = self.monthlytimestep)
+                                                                            monthlytimestep = self.monthlytimestep,
+                                                                            xysteps = self.xysteps)
 
             self.modheads_allinfo = modheads_allinfo
             self.modheads_stat_info_wisk = modheads_stat_info_wisk
@@ -259,7 +265,7 @@ class Krig:
         self.all_obs.to_csv(os.path.join('regression_data',f'all_gw_for_surf_processed_{self.basin}.csv'))
 
 
-    def filter_and_export_shp(self, filt_str=None):
+    def filter_and_export_shp(self, filt_str=None, allow_missing = True):
         if filt_str is None:
             filt_str = ['Santa', 'Sonoma', 'Peta']
 
@@ -281,26 +287,38 @@ class Krig:
         if c.sum()>0:
             missing = self.all_obs.loc[c,:]
             missing = missing.drop_duplicates(subset=['Station Name'])
-            print(missing)
-            print(f'size of missing stations in stat_info_wisk    {missing.shape}')
-
-            assert missing.shape==0, missing.loc[:,'Station Name'].unique()
 
 
+            if allow_missing:
+                import warnings
+                warnings.warn('There are missing stations\n')
+                miss = ', '.join(missing.loc[:,'Station Name'].unique())+' are missing'
+                warnings.warn(miss)
+                warnings.warn(f'size of missing stations in stat_info_wisk:\t{missing.shape}')
+            else:
+                raise AssertionError("the following stations are missing:\n{:}".format( missing.loc[:,'Station Name'].unique()))
 
-    def __extract_model_data(self, deeplayer  = 3, monthlytimestep = 18):
+
+
+    def __extract_model_data(self, deeplayer, monthlytimestep, xysteps):
         if self.basin == 'SRP':
-            modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = load_srp_mod(dayoffset=self.dayoffset,
-                                                                                                          deeplayer = deeplayer,
-                                                                                                          monthlytimestep = monthlytimestep)
-
+            modheads_allinfo, modheads_stat_info_wisk, \
+                modheads_stations, modheads_all_obs = load_srp_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer = deeplayer,
+                                                                      monthlytimestep = monthlytimestep,
+                                                                      xysteps = xysteps)
         elif self.basin.upper() == 'PET':
-            modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = None, None, None, None
+            modheads_allinfo, modheads_stat_info_wisk,\
+                modheads_stations, modheads_all_obs = load_pet_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer=deeplayer,
+                                                                      monthlytimestep=monthlytimestep,
+                                                                      xysteps=xysteps)
         elif self.basin.upper() == 'SON':
-            modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = load_son_mod(dayoffset=self.dayoffset,
-                                                                                                          deeplayer=deeplayer,
-                                                                                                          monthlytimestep=monthlytimestep
-                                                                                                          )
+            modheads_allinfo, modheads_stat_info_wisk,\
+                modheads_stations, modheads_all_obs = load_son_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer=deeplayer,
+                                                                      monthlytimestep=monthlytimestep,
+                                                                      xysteps=xysteps)
         else:
             modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = None, None, None, None
 
@@ -445,25 +463,48 @@ class Krig:
                 self.geophys.plot(col, ax=ax,
                              cmap='jet', legend=True, edgecolor='k', linewidth=.2, markersize=3)
 
-    def add_geophys_geol(self):
+    def add_geophys_geol(self, pre_export = False):
         print('\n\nadding krig data to seas_info')
         seas_info = self.seas_info
-        # seas_info.loc['PET0021','rasterelevation'] =31.8
+
+        if pre_export:
+            file_ = "seas_info_erase.csv"
+            print(f'exporting {file_}')
+            seas_info.to_csv(os.path.join('temp', file_))
+
 
         if self.add_geophys:
             print('adding geophysics')
-            seas_info = lgp.do_krig_all(seas_info, seas_info.loc[:,'Easting'],seas_info.loc[:,'Northing'] )
+            __statlocs = seas_info.loc[~seas_info.index.duplicated(),['Easting','Northing']]
+
+            __statlocs = lgp.do_krig_all(__statlocs, __statlocs.loc[:,'Easting'], __statlocs.loc[:,'Northing'])
+
+            __statlocs = __statlocs.drop(columns = ['Easting', 'Northing'])
+            sh = seas_info.shape
+            seas_info = pd.merge(seas_info, __statlocs, left_index=True, right_index=True)
+            print(f"seasinfo before join:{sh}\n and after {seas_info.shape}")
+
             seas_info = gpd.GeoDataFrame(seas_info,
-                                 geometry =
-                                    gpd.points_from_xy(seas_info.loc[:,'Easting'],
-                                                       seas_info.loc[:,'Northing']),
-                                    crs = 2226)
+                                        geometry = gpd.points_from_xy(seas_info.loc[:,'Easting'],
+                                        seas_info.loc[:,'Northing']),
+                                        crs = 2226)
+            # seas_info = lgp.do_krig_all(seas_info, seas_info.loc[:,'Easting'],seas_info.loc[:,'Northing'] )
+            # seas_info = gpd.GeoDataFrame(seas_info,
+            #                      geometry =
+            #                         gpd.points_from_xy(seas_info.loc[:,'Easting'],
+            #                                            seas_info.loc[:,'Northing']),
+            #                         crs = 2226)
             check_bad(seas_info,'Simple_Bou')
             # if seas_info.Simple_Bou.isnull().sum() > 0:
             #     print(seas_info[seas_info.Simple_Bou.notnull()])
             #     ax = seas_info[seas_info.Simple_Bou.notnull()].plot()
             #     ctx.add_basemap(ax, crs = 2226)
             #     raise ValueError('bad geophys prediction')
+
+        if pre_export:
+            file_ = "seas_info_erasev2.csv"
+            print(f'exporting {file_}')
+            seas_info.head(10000).to_csv(os.path.join('temp', file_))
 
         print('adding krig data to seas_info')
         if self.add_geology:
@@ -522,15 +563,14 @@ def categorize_depths_inputs(df, fillvalue='Other'):
     return df.loc[:, col]
 
 
-def load_srp_mod(dayoffset = 92, deeplayer = 3, monthlytimestep = 18):
+def load_srp_mod(dayoffset, deeplayer, monthlytimestep, xysteps):
     from conda_scripts.utils import extract_model_heads
-    steps = 12
-    # monthlytimestep = 18
+
     modgeoms, dts, workspace, mg = extract_model_heads.get_model_info()
     filename = extract_model_heads.get_file(workspace)
     head, trefall = extract_model_heads.get_head(filename, mg, layers=[0, deeplayer], step=monthlytimestep, basin = 'srp')
 
-    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, steps=steps)
+    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, steps=xysteps)
     headgdf.loc[:, 'geometry'] = headgdf.geometry.centroid
 
     modheads_all_obs = extract_model_heads.format_heads_for_krig(headgdf, dayoffset = dayoffset)
@@ -549,19 +589,18 @@ def load_srp_mod(dayoffset = 92, deeplayer = 3, monthlytimestep = 18):
 
     return modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs
 
-def load_son_mod(dayoffset = 92):
+def load_son_mod(dayoffset, deeplayer,  monthlytimestep, xysteps):
     from conda_scripts.utils import extract_model_heads
-    steps = 12
-    monthlytimestep = 18
+
     modgeoms, dts, workspace, mg = extract_model_heads.get_model_info(basin = 'son')
     filename = extract_model_heads.get_file(workspace, "sv_model_grid_6layers.hds")
-    head, trefall = extract_model_heads.get_head(filename, mg, layers=[0, 3], step=monthlytimestep,
+    head, trefall = extract_model_heads.get_head(filename, mg, layers=[0, deeplayer], step=monthlytimestep,
                                                  basin = 'son', formatted=False)
 
-    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, steps=steps)
+    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, xysteps=xysteps)
     headgdf.loc[:, 'geometry'] = headgdf.geometry.centroid
 
-    modheads_all_obs = extract_model_heads.format_heads_for_krig(headgdf, dayoffset = dayoffset)
+    modheads_all_obs = extract_model_heads.format_heads_for_krig(headgdf, dayoffset = dayoffset, basin='SON')
 
     modheads_stations = extract_model_heads.get_mod_stations(headgdf)
     modheads_stations = modheads_stations.reset_index(drop=True)
@@ -569,10 +608,41 @@ def load_son_mod(dayoffset = 92):
     modheads_allinfo = modheads_stations.loc[:, ['Station Name', 'Easting', 'Northing', 'Latitude',
                                                  "Longitude", 'Well_Depth_Category']]
     modheads_allinfo = modheads_allinfo.set_index(modheads_allinfo.loc[:, 'Station Name'])
-    modheads_allinfo.loc[:, ['Site']] = 'Santa Rosa Plain'
+    modheads_allinfo.loc[:, ['Site']] = 'Sonoma Valley'
 
     modheads_stat_info_wisk = modheads_stations.loc[:, ['Station Name', 'Easting', 'Northing', 'geometry']]
     modheads_stat_info_wisk.loc[:, ['Reference Elevation']] = np.nan
-    modheads_stat_info_wisk.loc[:, ['Site']] = 'Santa Rosa Plain'
+    modheads_stat_info_wisk.loc[:, ['Site']] = 'Sonoma Valley'
+
+    return modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs
+
+def load_pet_mod(dayoffset, deeplayer,  monthlytimestep, xysteps):
+    # TODO remove model head where values don't fall on first of month DONE
+    from conda_scripts.utils import extract_model_heads
+    basin = 'PET'
+    modgeoms, dts, workspace, mg = extract_model_heads.get_model_info(basin = basin)
+    # filename = extract_model_heads.get_file(workspace, "Head_save.fhd")
+    filename = os.path.join(workspace, "Output", "Head_save.fhd")
+    head, trefall = extract_model_heads.get_head(filename, mg, layers=[0, deeplayer], step=monthlytimestep,
+                                                 basin = 'pet', formatted=True)
+
+    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, xysteps=xysteps)
+    headgdf.loc[:, 'geometry'] = headgdf.geometry.centroid
+
+    modheads_all_obs = extract_model_heads.format_heads_for_krig(headgdf, dayoffset = dayoffset, basin=basin)
+
+    modheads_all_obs.loc[:,'Manual Measurement'] = modheads_all_obs.loc[:,'Manual Measurement']*3.28084
+
+    modheads_stations = extract_model_heads.get_mod_stations(headgdf)
+    modheads_stations = modheads_stations.reset_index(drop=True)
+
+    modheads_allinfo = modheads_stations.loc[:, ['Station Name', 'Easting', 'Northing', 'Latitude',
+                                                 "Longitude", 'Well_Depth_Category']]
+    modheads_allinfo = modheads_allinfo.set_index(modheads_allinfo.loc[:, 'Station Name'])
+    modheads_allinfo.loc[:, ['Site']] = 'Petaluma Valley'
+
+    modheads_stat_info_wisk = modheads_stations.loc[:, ['Station Name', 'Easting', 'Northing', 'geometry']]
+    modheads_stat_info_wisk.loc[:, ['Reference Elevation']] = np.nan
+    modheads_stat_info_wisk.loc[:, ['Site']] = 'Petaluma Valley'
 
     return modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs
