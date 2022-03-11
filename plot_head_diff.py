@@ -205,10 +205,10 @@ class PlotContour(object):
         out_predict = addcol2elev(df_elev, pred_col, year=year_predict, month=months(season), shallow=depth_type,
                                   dayoffset=dayoffset, add_climate=add_climate, n_months=n_months)
         out_predict = out_predict.loc[:, pred_col]
-        print(out_predict.head(1))
+        # print(out_predict.head(1))
 
         out_latlon = df_elev.loc[:, 'Easting':'Northing'].values
-        print(f"these are the predictors {pred_col}")
+        # print(f"these are the predictors {pred_col}")
 
         if scale_data:
             out_predict = scaler.transform(out_predict)
