@@ -5,7 +5,8 @@ import numpy as np
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-def get_ss(ml, layer,standard_units, spec_storage = True):
+
+def get_ss(ml, layer, standard_units, spec_storage=True):
     '''
     get specific storage from ml
     :param ml:
@@ -25,7 +26,7 @@ def get_ss(ml, layer,standard_units, spec_storage = True):
         ss = ml.upw.sy.array[0]
         print(f'using specific yield')
 
-    #filter inactive
+    # filter inactive
     c = ss <= 0
     ss[c] = np.nan
 
@@ -40,7 +41,7 @@ def get_ss(ml, layer,standard_units, spec_storage = True):
     epsg = ml.dis.sr.proj4_str
 
     ss = gpd.GeoDataFrame(zr, geometry=gpd.points_from_xy(xxr, yyr),
-                           columns = ['storage'], crs = epsg)
+                          columns=['storage'], crs=epsg)
     print(ss.crs)
     ss = ss.to_crs(2226)
 
@@ -60,8 +61,6 @@ def get_ss(ml, layer,standard_units, spec_storage = True):
     # ss = ss.where(ss > 0)
 
     return ss
-
-
 
 
 def interp_ss(ss, wl):
@@ -101,18 +100,27 @@ def interp_ss(ss, wl):
     return ss_new
 
 
-def get_mask(filename=r'C:\GSP\waterlevel\regression_data\allbasin_mask.nc'):
+def get_mask(basin, filename=r'C:\GSP\waterlevel\regression_data\allbasin_mask.nc'):
     '''
     get mask for models
+    :param basin: name of basin
     :param filename:
     :return:
     '''
-    mask = xr.open_dataarray(filename)
-    mask = mask.where(mask == 1)
 
-    mask = mask.rename({'lon': 'easting',
-                        'lat': 'northing'})
-    return mask
+    bas_dict = {'SRP': 1, 'SON': 2, 'PET': 0}
+    if not (basin.upper() in bas_dict.keys()):
+        raise ValueError(f"basin not in basin_dict"
+                         'use {bas_dict.keys()}')
+    else:
+        print(f"getting mask for {basin}")
+
+    basin_value = bas_dict[basin.upper()]
+    m = xr.open_dataarray(filename)
+    m = m.where(m == basin_value).notnull()
+    m = m.rename({'lon': 'easting',
+                  'lat': 'northing'})
+    return m
 
 
 def get_season_depth(deep, spring):
@@ -154,21 +162,30 @@ def get_waterlevel_change_xr(folder, deep=True, spring=True):
     return wl
 
 
-def get_stor_estimate(ss, mask, basin, depth=300,  meanwl_ch=1.5):
+def get_stor_estimate(ss, mask, basin, thickness=300, meanwl_ch=1.5):
     bas = conda_scripts.rich_gis.get_active_subbasins()
     bas_area = bas.loc[basin.upper()].geometry.area
 
     ss_average = ss.where(mask == 1).mean()
 
-    storch = meanwl_ch * bas_area * depth * ss_average / 43560
+    storch = meanwl_ch * bas_area * thickness * ss_average / 43560
     print('------------showing for sanity check\n')
     print(
-        f'bas area: {bas_area:,.0f} ft^2 ({bas_area / 43560:,.0f} acres) \ndepth: {depth}ft\nss_average = {ss_average.data:,.4g} [1/ft]\
+        f'bas area: {bas_area:,.0f} ft^2 ({bas_area / 43560:,.0f} acres) \ndepth: {thickness}ft\nss_average = {ss_average.data:,.4g} [1/ft]\
     \nmeanwl_ch = {meanwl_ch:+,.1f}ft\nTotal Storage change: {storch.data:,.0f} af')
     print('\n---------')
 
 
 def get_average_wl_change(wl, mask, deep, spring, out_folder):
+    '''
+
+    :param wl:
+    :param mask:
+    :param deep:
+    :param spring:
+    :param out_folder:
+    :return:
+    '''
     wl_av = wl.where(mask == 1).groupby('year').mean(...).to_dataframe()
 
     depth, season = get_season_depth(deep, spring)
@@ -181,14 +198,15 @@ def get_average_wl_change(wl, mask, deep, spring, out_folder):
     return wl_av
 
 
-def get_storage_ts_in_af(ssnew, wl, depth, deep, spring, out_folder, mask):
+def get_storage_ts_in_af(ssnew, wl, thickness, deep, spring, out_folder, mask):
     dh = wl.easting.diff(dim='easting').data[0]
     dy = wl.northing.diff(dim='northing').data[0]
     cell_area = dh * dy
-    print(cell_area)
-    stor = (ssnew * wl).where(mask == 1) * cell_area * depth
 
-    stor = stor.groupby('year').sum(...).to_dataframe().multiply(1 / 43560)
+    # units in ft^3
+    stor_xr = (ssnew * wl).where(mask == 1) * cell_area * thickness
+
+    stor = stor_xr.groupby('year').sum(...).to_dataframe().multiply(1 / 43560)
 
     stor.columns = ['Storage Change (af)']
 
@@ -199,4 +217,6 @@ def get_storage_ts_in_af(ssnew, wl, depth, deep, spring, out_folder, mask):
     plt.savefig(os.path.join(out_folder, f"storage change {depth} Aquifer - {season}.png"))
 
     stor.to_excel(os.path.join(out_folder, f"storage change {depth} Aquifer - {season}.xlsx"))
-    return stor
+
+
+    return stor, stor_xr
