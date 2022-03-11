@@ -15,6 +15,7 @@ from conda_scripts.utils.gwl_krig_preprocess import date2year_frac, date2date_fr
 import textwrap
 from sklearn.metrics import mean_squared_error
 import process_climate as pcr
+import check_files
 
 import xarray as xr
 
@@ -72,9 +73,11 @@ class MapGW:
             years = yearstep
 
         basins = [self.train_input.basin]
-        contours = np.arange(-20, 260, 20)
+        contours = np.arange(-200, 600, 20)
         first = PlotContour(self.train_pred.m_rk,
                             foldername=self.train_input.map_foldername)
+
+        check_files.check_prediction_files_permission(self.path, self.train_input.map_foldername)
 
         for season in seasons:
             for deep in ['Deep', 'Shallow', ]:
@@ -92,6 +95,8 @@ class MapGW:
                                       add_climate=self.train_input.add_climate,
                                       n_months=self.train_input.nmonths,
                                       add_temp=self.train_input.add_temp)
+
+                        print(f"\n\nSeason: {season}, Depth: {deep}, Year: {year}")
 
                         if netcdf_only:
                             first.save_prediction(first.grid_z2, year, deep, season)
@@ -117,7 +122,7 @@ class MapGW:
                                                 f'{bas}_{year}_{first.season}_{deep}.png')
 
                         if seas_gdf is None:
-                            print(f"{year}-{season}--{deep} is not in the columns... ie is not covered by observations\n\n")
+                            print(f"{year}-{season}-{deep} is not in the columns... ie is not covered by observations\n\n")
 
                         else:
                             seas_gdf = seas_gdf.to_crs(2226)
@@ -188,8 +193,12 @@ class MapGW:
 
                         plt.savefig(filename, dpi=250, bbox_inches='tight')
 
+                        # todo fix exporting of shapefiles DONE
+                        # todo install rioxarray
+                        offset = np.abs(first.x_stp[1] - first.x_stp[0])/2
+                        print(f"the spatial offset values is {offset}")
                         rich_gis.write_acsii(np.flipud(first.grid_z2),
-                                             first.x_stp, first.y_stp, -999,
+                                             first.x_stp-offset, first.y_stp-offset, -999,
                                              filename.replace('.png', '.tif'))
 
                         cntrs_filled_gdf = rich_gis.contours2shp(first.mpl_contours_filled)
@@ -246,10 +255,10 @@ class PlotContour(object):
         out_predict = addcol2elev(df_elev, pred_col, year=year_predict, month=months(season), shallow=depth_type,
                                   dayoffset=dayoffset, add_climate=add_climate, add_temp=add_temp, n_months=n_months)
         out_predict = out_predict.loc[:, pred_col]
-        print(out_predict.head(1))
+        # print(out_predict.head(1))
 
         out_latlon = df_elev.loc[:, 'Easting':'Northing'].values
-        print(f"these are the predictors {pred_col}")
+        # print(f"these are the predictors {pred_col}")
 
         if scale_data:
             out_predict = scaler.transform(out_predict)
@@ -280,6 +289,7 @@ class PlotContour(object):
         ax = m.plotloc(fig, locname=locname, maptype=maptype)
         mpl_contours_filled = ax.contourf(self.x_stp, self.y_stp, self.grid_z2, levels=contours, alpha=0.5,
                                           transform=ccrs.epsg(2226),
+                                          cbar_kwargs={'shrink': .3},
                                           cmap='nipy_spectral')
 
         mpl_contour_lines = ax.contour(self.x_stp, self.y_stp, self.grid_z2, levels=contours, alpha=.9,
@@ -322,6 +332,7 @@ class PlotContour(object):
             print('concatenating predictions')
             self.predictions = xr.concat([self.predictions, ds], dim='time')
 
+
     def export_prediction(self, path):
         vals = pd.MultiIndex.from_product([['Deep', 'Shallow'], ['Fall', 'Spring']])
         for v, i in vals:
@@ -340,6 +351,7 @@ class PlotContour(object):
             print(f"saving WL changes netcdf to {filename}")
             print(b)
             b.to_netcdf(filename)
+
 
 
 def make_xr(array, year, depth, season, easting, northing):
