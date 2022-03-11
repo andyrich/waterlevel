@@ -5,6 +5,7 @@ import predict
 import pickle
 import warnings
 import basin_setup
+import check_files
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DeprecationWarning)
@@ -19,9 +20,9 @@ deeplayer, add_temp, add_climate, filter_manual, obs_filename, xysteps = \
 
 reload = True
 plot_all = False
-netcdf_only = False
+netcdf_only = True
 years = np.arange(1970,2022,1)
-
+# years = np.arange(2010,2022,1)
 
 
 if reload:
@@ -32,6 +33,9 @@ if reload:
 
     krigobj.map_foldername = 'maps_' + filename_base
     krigobj.hydros_foldname = 'hydros_' + filename_base
+
+    check_files.check_prediction_files_permission(os.path.join('GIS', 'hydro_experiment'),
+                                                  krigobj.map_foldername)
 
 else:
     krigobj = setup_and_import.Krig(add_modeled = add_modeled,
@@ -48,6 +52,9 @@ else:
                                     nmonths=nmonths,
                                     filter_manual = filter_manual,
                                     obs_filename = obs_filename)
+
+    check_files.check_prediction_files_permission(os.path.join('GIS', 'hydro_experiment'),
+                                                  krigobj.map_foldername)
 
     krigobj.load_obs()
 
