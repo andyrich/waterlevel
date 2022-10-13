@@ -79,8 +79,12 @@ class MapGW:
 
         check_files.check_prediction_files_permission(self.path, self.train_input.map_foldername)
 
+        depths = ['Deep', 'Shallow']
+        total_maps = len(seasons) * len(depths) * len(basins) * len(years)
+        cnt = 0
+
         for season in seasons:
-            for deep in ['Deep', 'Shallow', ]:
+            for deep in depths:
                 for bas in basins:
                     for year in years:
                         first.predict(elev=self.train_input.elev,
@@ -96,7 +100,8 @@ class MapGW:
                                       n_months=self.train_input.nmonths,
                                       add_temp=self.train_input.add_temp)
 
-                        print(f"\n\nSeason: {season}, Depth: {deep}, Year: {year}")
+                        cnt = cnt+1
+                        print(f"\n\nSeason: {season}, Depth: {deep}, Year: {year}, Map count: {cnt}/{total_maps}")
 
                         if netcdf_only:
                             first.save_prediction(first.grid_z2, year, deep, season)
@@ -201,8 +206,16 @@ class MapGW:
                                              first.x_stp-offset, first.y_stp-offset, -999,
                                              filename.replace('.png', '.tif'))
 
-                        cntrs_filled_gdf = rich_gis.contours2shp(first.mpl_contours_filled)
-                        cntrs_filled_gdf.to_file(filename.replace('.png', '_fill_contours_filled.shp'))
+                        # cntrs_filled_gdf = rich_gis.contours2shp(first.mpl_contours_filled)
+                        # cntrs_filled_gdf.to_file(filename.replace('.png', '_fill_contours_filled.shp'))
+
+                        rich_gis.raster2contour_filled(filename.replace('.png', '.tif'),
+                                                filename.replace('.png', '_cnt20ft.shp'),
+                                                20)
+
+                        rich_gis.raster2contour_filled(filename.replace('.png', '.tif'),
+                                                filename.replace('.png', '_cnt100ft.shp'),
+                                                100)
 
                         rich_gis.raster2contour(filename.replace('.png', '.tif'),
                                                 filename.replace('.png', '_cnt20ft.shp'),

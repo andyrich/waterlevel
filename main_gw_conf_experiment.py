@@ -9,9 +9,9 @@ import check_files
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DeprecationWarning)
-basin = "PET"
-filename_base = f'_v4_{basin}_allmodmonths_wtemp_editdata_manual_only_observed_to_2022_march'
-
+basin = "SRP"
+# filename_base = f'_v3_{basin}_allmodmonths_wtemp_editdata_manual_only_observed_to_2022_march'
+filename_base = f'_v3_{basin}_experiment_svm'
 filename_base, smooth, smooth_value, modweight, add_modeled, \
 monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
 deeplayer, add_temp, add_climate, filter_manual, obs_filename, xysteps = \
@@ -19,10 +19,10 @@ deeplayer, add_temp, add_climate, filter_manual, obs_filename, xysteps = \
 
 
 reload = True
-plot_all = True
+plot_all = False
 netcdf_only = False
-years = np.arange(1970,2022,1)
-# years = np.arange(2010,2022,1)
+# years = np.arange(1970,2022,1)
+years = np.arange(2010,2022,1)
 
 
 if reload:

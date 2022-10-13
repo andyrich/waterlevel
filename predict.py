@@ -22,7 +22,8 @@ import rasterstats as rs
 from conda_scripts.utils.gwl_krig_preprocess import date2year_frac, date2date_frac
 import plot_hydros
 from sklearn.model_selection import train_test_split
-
+from sklearn.neural_network import MLPRegressor
+from sklearn.svm import SVR
 
 class krig_predict:
     '''
@@ -161,7 +162,10 @@ class krig_predict:
 
             self.m_rk.fit(self.p_train_scaled, self.x_train, self.target, weights=self.weights)
 
-            score = self.m_rk.score(self.p_test_scaled, self.x_test, self.target_test)
+            if hasattr(self.m_rk, 'socre'):
+                score = self.m_rk.score(self.p_test_scaled, self.x_test, self.target_test)
+            else:
+                score = 0.0
 
             [print(f'shape {xi.shape}') for xi in [self.p_train_scaled, self.x_train, self.target, self.weights]]
 
@@ -404,12 +408,60 @@ def set_model(m=None, option='a'):
         m_rk = adaboost()
     elif option == 'GradientBoostingRegressor':
         m_rk = gradientboost()
+    elif option == 'ann':
+        m_rk = ann()
+    elif option =='svm':
+        m_rk = svm()
 
 
     else:
         raise AssertionError(f"option {option} not found ")
 
     return m_rk
+
+class svm:
+
+    def __init__(self):
+        self.model = SVR()
+
+    def fit(self, p, x, y, weights=None):
+        print('concatenating inputs')
+        X = np.hstack([p, x])
+        print('fitting inputs')
+        self.model.fit(X, y, sample_weight = weights)
+        print('done fitting')
+
+    def predict(self, p_pred, xpred):
+        print('doing predictions...')
+        X_pred = np.hstack([p_pred, xpred])
+        pred = self.model.predict(X_pred)
+        print('done predicting')
+        return pred
+
+
+class ann:
+    '''
+    https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html
+
+    '''
+
+
+    def __init__(self):
+        self.model = MLPRegressor(random_state=1)
+
+    def fit(self, p, x, y, weights=None):
+        print('concatenating inputs')
+        X = np.hstack([p, x])
+        print('fitting inputs')
+        self.model.fit(X, y)
+        print('done fitting')
+
+    def predict(self, p_pred, xpred):
+        print('doing predictions...')
+        X_pred = np.hstack([p_pred, xpred])
+        pred = self.model.predict(X_pred)
+        print('done predicting')
+        return pred
 
 
 class gradientboost:

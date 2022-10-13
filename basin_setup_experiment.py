@@ -1,6 +1,6 @@
 import numpy as np
 
-def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
+def basin_info(filename_base = None,basin = 'SRP'):
     if basin.upper() == 'SRP':
         if filename_base is None:
             filename_base = f'_FINALv8_{basin}_allmodmonths'
@@ -12,7 +12,7 @@ def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
         modweight = .25
         add_modeled = True
         nmonths = 120
-        modeltype = 'regress_only'
+        modeltype = 'svm'
         monthlytimestep = 1
         dayoffset = 30
         scale_data = True

@@ -69,7 +69,7 @@ class Krig:
         self.filter_manual = filter_manual
         self.obs_filename = obs_filename
 
-        assert basin in ['SRP', 'SON', 'PET'], 'wrong option for basin name, should be SRP, SON, or PET'
+        assert basin in ['SRP', 'SON', 'PET', 'ALL_BASIN'], 'wrong option for basin name, should be SRP, SON, or PET'
         self.basin = basin
 
         self.dayoffset = dayoffset
@@ -161,11 +161,17 @@ class Krig:
         # # load all gw level data.
         # #### if this hasn't been done recently, do this. otherwise can be skipped and just import data from csv instead
         outfolder = 'regression_data'
-        maindf = load_all_gw_wiski.load_all_gw(download=False, outfolder=outfolder, filter_manual = self.filter_manual, outfile = self.obs_filename)
+        maindf = load_all_gw_wiski.load_all_gw(download=False, outfolder=outfolder,
+                                               filter_manual = self.filter_manual,
+                                               outfile = self.obs_filename)
 
         # print(maindf.filter(like='Site').head())
-
-        maindf = maindf[maindf.Site == self.basin]
+        # TODO fix model so that 'ALL_BASIN' filter works
+        if self.basin == 'ALL_BASIN':
+            print('Not filter by basin because basin==ALL_BASIN')
+            pass
+        else:
+            maindf = maindf[maindf.Site == self.basin]
 
         assert maindf.shape[0] > 0, 'maindf shape is zero after filtering for basin'
 
@@ -319,6 +325,30 @@ class Krig:
                                                                       deeplayer=deeplayer,
                                                                       monthlytimestep=monthlytimestep,
                                                                       xysteps=xysteps)
+        elif self.basin.upper() == 'ALL_BASIN':
+
+            modheads_allinfo_0, modheads_stat_info_wisk_0, \
+                modheads_stations_0, modheads_all_obs_0 = load_srp_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer = deeplayer,
+                                                                      monthlytimestep = monthlytimestep,
+                                                                      xysteps = xysteps)
+            modheads_allinfo_1, modheads_stat_info_wisk_1,\
+                modheads_stations_1, modheads_all_obs_1 = load_son_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer=deeplayer,
+                                                                      monthlytimestep=monthlytimestep,
+                                                                      xysteps=xysteps)
+
+            modheads_allinfo, modheads_stat_info_wisk,\
+                modheads_stations, modheads_all_obs = load_pet_mod(dayoffset=self.dayoffset,
+                                                                      deeplayer=deeplayer,
+                                                                      monthlytimestep=monthlytimestep,
+                                                                      xysteps=xysteps)
+
+            modheads_allinfo = modheads_allinfo.append(modheads_allinfo_0).append(modheads_allinfo_1)
+            modheads_stat_info_wisk = modheads_allinfo.append(modheads_stat_info_wisk_0).append(modheads_stat_info_wisk_1)
+            modheads_stations = modheads_allinfo.append(modheads_stations_0).append(modheads_stations_1)
+            modheads_all_obs = modheads_allinfo.append(modheads_all_obs_0).append(modheads_all_obs_1)
+
         else:
             modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = None, None, None, None
 
@@ -570,7 +600,7 @@ def load_srp_mod(dayoffset, deeplayer, monthlytimestep, xysteps):
     filename = extract_model_heads.get_file(workspace)
     head, trefall = extract_model_heads.get_head(filename, mg, layers=[0, deeplayer], step=monthlytimestep, basin = 'srp')
 
-    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, steps=xysteps)
+    headgdf = extract_model_heads.head_array_to_gdf(head, trefall, modgeoms, xysteps=xysteps)
     headgdf.loc[:, 'geometry'] = headgdf.geometry.centroid
 
     modheads_all_obs = extract_model_heads.format_heads_for_krig(headgdf, dayoffset = dayoffset)
