@@ -10,7 +10,7 @@ class wl_ch:
         config_object = ConfigParser()
 
         p = 'config'
-        file = os.path.join(p, "config_wlch.ini")
+        file = os.path.join(p, "config_wlch_2023.ini")
 
         if not os.path.exists(file):
             raise ValueError(f'file does not exist. {file}')

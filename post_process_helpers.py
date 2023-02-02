@@ -38,7 +38,8 @@ def get_ss(ml, layer, standard_units, spec_storage=True):
 
     xxr, yyr, zr = np.ravel(easting), np.ravel(northing), np.ravel(ss)
 
-    epsg = ml.dis.sr.proj4_str
+    #epsg = ml.dis.sr.proj4_str
+    epsg = ml.modelgrid.epsg
 
     ss = gpd.GeoDataFrame(zr, geometry=gpd.points_from_xy(xxr, yyr),
                           columns=['storage'], crs=epsg)

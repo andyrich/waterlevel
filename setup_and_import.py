@@ -122,16 +122,20 @@ class Krig:
         print('done setting up.')
 
     def load_obs(self):
-        # # Use this to map gw levels for gw basins.
-        #
-        # this heavily relies on the following scripts, both of which are located in the conda_scripts folder:
-        # - plot_wet
-        # - and gwplot_wiski
-        #
-        # This script uses the above scripts to download all of the data for each station.
-        #
-        # The station data is downloaded direclty from wiski using their web service.
-        #
+        '''
+        # Use this to map gw levels for gw basins.
+
+        this heavily relies on the following scripts, both of which are located in the conda_scripts folder:
+        - plot_wet
+        - and gwplot_wiski
+
+        This script uses the above scripts to download all of the data for each station.
+
+        The station data is downloaded direclty from wiski using their web service.
+
+        :return:
+        '''
+
         # TODO - remove filter of observations 50ft bgs
         print('\n\nloading data')
         # # collect all of the station info here:
@@ -147,6 +151,7 @@ class Krig:
 
         allinfo.loc[:, 'Site Number'] = allinfo.loc[:,'Site Number'].fillna('ss').str.upper()
 
+        # TODO - remove basin filter
         allinfo = allinfo[allinfo.loc[:,'Site Number'].isin(pd.Series(self.basin))]
 
         # assert allinfo.shape[0]>0, 'allinfo shape is zero after filtering for basin'
@@ -175,17 +180,17 @@ class Krig:
 
         assert maindf.shape[0] > 0, 'maindf shape is zero after filtering for basin'
 
-        if self.plot_all:
-            temp = maindf.copy()
-            # temp = temp.set_index('Timestamp')
-            temp.loc[:, 'year'] = temp.index.year
-            for name, g in temp.query("year>2010").groupby('year'):
-                plt.figure()
-                ax = g.groupby('station_name').min().filter(like='Manual Measurement').plot(label=name)
-                ax.set_title(name)
-                plt.savefig(os.path.join('temp plots', f'year{name}'+'.png'))
-                # plt.close(fig)
-                plt.close('all')
+        # if self.plot_all:
+        #     temp = maindf.copy()
+        #     # temp = temp.set_index('Timestamp')
+        #     temp.loc[:, 'year'] = temp.index.year
+        #     for name, g in temp.query("year>2010").groupby('year'):
+        #         plt.figure()
+        #         ax = g.groupby('station_name').min().filter(like='Manual Measurement').plot(label=name)
+        #         ax.set_title(name)
+        #         plt.savefig(os.path.join('temp plots', f'year{name}'+'.png'))
+        #         # plt.close(fig)
+        #         plt.close('all')
 
 
         maindf.loc[:, 'Manual Measurement'] = pd.to_numeric(maindf.loc[:, 'Manual Measurement'], errors = 'coerce')

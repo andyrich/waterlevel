@@ -39,7 +39,7 @@ class MapHeadDiff:
             self.nc[name] = rio
 
 
-    def plotmap(self):
+    def plotmap(self, maxyear = 2023):
 
         print(f"saving maps to {os.path.join(self.path, self.train_input.map_foldername)}")
         try:
@@ -54,7 +54,7 @@ class MapHeadDiff:
         # basins = ['SRP', 'SON', 'PET']
 
         if isinstance(yearstep, int):
-            years = np.arange(2010, 2022, yearstep)
+            years = np.arange(2010, maxyear, yearstep)
         else:
             years = yearstep
 

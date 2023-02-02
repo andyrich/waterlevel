@@ -4,21 +4,15 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import process_climate as pcr
 import conda_scripts.utils.krig_dataset as lgp
 import conda_scripts
-
 import pandas as pd
 import numpy as np
-
 import os
 import pickle
-
 from sklearn import preprocessing
 from pykrige.rk import RegressionKriging
 import sklearn.ensemble as ens_
-
 import geopandas as gpd
-
 import rasterstats as rs
-
 from conda_scripts.utils.gwl_krig_preprocess import date2year_frac, date2date_frac
 import plot_hydros
 from sklearn.model_selection import train_test_split
@@ -243,7 +237,8 @@ class krig_predict:
         else:
             observed = None
 
-        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, self.predicted, observed=observed, fancy=True)
+        plot_hydros.plot_rmp_hydro_pred(self.train.hydros_foldname, self.predicted, observed=observed, fancy=True,
+                                        errors_keep_going = False)
 
         print('done!\n' * 3)
 
@@ -279,7 +274,7 @@ def predict_rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, sl
     print(f'adjusting datetime by adjusting forward {dayoffset} days')
     base_df = obs.drop_duplicates(['Easting', 'Northing'])
     dfall = pd.DataFrame()
-    for year in np.arange(1975, 2022):
+    for year in np.arange(1975, 2023):
         if monthly:
             for month_ in np.arange(1, 13):
                 t = base_df.copy()

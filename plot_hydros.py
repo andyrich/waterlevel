@@ -112,11 +112,11 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
             if errors_keep_going:
                 pass
             else:
-                break
+                # raise ValueError(f"\n\nSomething went wrong\n\n{str(e)}\n")
+                raise e
 
             if fancy:
                 try:
-
                     plot_simple()
                 except:
                     print('really didnt work')

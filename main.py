@@ -4,24 +4,25 @@ import setup_and_import
 import predict
 import pickle
 import warnings
-import basin_setup_experiment
+import basin_setup
 import check_files
+import project2d
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=DeprecationWarning)
-basin = "PET"
-filename_base = f'_v4_{basin}_allmodmonths_wtemp_editdata_manual_only_observed_to_2022_march'
+basin = "SON"
+filename_base = f'_v1_{basin}_allmodmonths_to_01172023'
 
 filename_base, smooth, smooth_value, modweight, add_modeled, \
 monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
 deeplayer, add_temp, add_climate, filter_manual, obs_filename, xysteps = \
-    basin_setup_experiment.basin_info(filename_base,basin)
+    basin_setup.basin_info(filename_base,basin)
 
 
 reload = True
-plot_all = True
-netcdf_only = False
-years = np.arange(1970,2022,1)
+plot_all = False
+netcdf_only = True
+years = np.arange(1970,2023,1)
 # years = np.arange(2010,2022,1)
 
 
@@ -110,8 +111,7 @@ pred.export_predicted()
 pred.run_prediction_for_hydros()
 pred.plot_hydros(plot_train=False)
 
-# #### maps
-import project2d
+
 gwmap = project2d.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
 
 gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'],
