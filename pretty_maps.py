@@ -9,7 +9,7 @@ import conda_scripts.plot_help as ph
 import cartopy.crs as ccrs
 import contextily as ctx
 import xarray as xr
-plt.rcParams['figure.figsize'] = (6, 6)
+plt.rcParams['figure.figsize'] = (6, 8)
 import post_process as pp
 
 
