@@ -79,7 +79,7 @@ def plot_year(basin, year, depth, season, datafolder, out_folder):
                  buffer=2000, limit=5, already_str=already_str)
 
     def fmt(x):
-        s = f"{int(x):0d}ft"
+        s = f"{int(x):1d}ft"
         return s
 
     ax.clabel(CS, CS.levels, inline=True, fmt=fmt, fontsize=8, colors='k')
