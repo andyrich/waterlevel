@@ -116,8 +116,8 @@ class Krig:
         obs_filename = {obs_filename}\n\
         filter_manual = {filter_manual}\n"
 
-        assert os.path.exists('T:\\'), 'need to connect to SCWA computers'
-        assert os.path.exists('S:\\'), 'need to connect to SCWA computers'
+        assert os.path.exists('T:\\'), 'need to connect to T Drive computers'
+        assert os.path.exists('S:\\'), 'need to connect to S Drive computers'
 
         print('done setting up.')
 
@@ -226,6 +226,7 @@ class Krig:
 
         if self.add_modeled:
             print('\n\nadding modeled data to allinfo')
+            #TODO: add option to not load modeled data and just load pre-processed model data
 
             modheads_allinfo, modheads_stat_info_wisk, \
             modheads_stations, modheads_all_obs = self.__extract_model_data(deeplayer = self.deeplayer,
@@ -245,7 +246,8 @@ class Krig:
             allinfo = allinfo.append(modheads_allinfo)
             print(f'shape after:{allinfo.shape}')
 
-            all_obs = all_obs.append(modheads_all_obs)
+            all_obs = pd.concat([all_obs, modheads_all_obs])
+            # all_obs = all_obs.append(modheads_all_obs)
 
 
         self.allinfo = allinfo

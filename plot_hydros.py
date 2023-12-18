@@ -1,3 +1,4 @@
+import datetime
 import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -32,12 +33,30 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
         input_long_lat = rich_gis.conv_coord(en[0], en[1],
                                              inepsg='epsg:2226', outepsg='epsg:4326')
 
-        nwp.do_plot(close_plot=False, input_long_lat=input_long_lat)
-        nwp.upleft.scatter(g.datetime,
-                           g.predicted.values,
+        nwp.do_plot(close_plot=False, input_long_lat=input_long_lat,plot_wet =False,seasonal = False, plot_dry= False,)
+        print(g)
+        print(g.dtypes)
+        print(g.datetime)
+        print(g.predicted)
+        print(g.isnull().sum())
+        # fig, ax = plt.subplots(1,1)
+        # ax.scatter(g.datetime,
+        #                    g.predicted.astype(float).values)
+        # plt.show()
+        xx = g.loc[:,'datetime'].replace(np.NaN, pd.NaT).values.astype("datetime64[D]")
+        yy = g.loc[:,'predicted']
+
+        nwp.upleft.scatter(xx,
+                           yy,
                            s=10, c='None',
                            edgecolors='b', zorder=20,
-                           marker='.', label='Predicted')
+                           marker='o', label='Predicted')
+
+        # nwp.upleft.scatter(g.datetime,
+        #                    g.predicted.astype(float).values,
+        #                    s=10, c='None',
+        #                    edgecolors='b', zorder=20,
+        #                    marker='.', label='Predicted')
 
         if observed is None:
             pass
@@ -86,8 +105,12 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
         t.get_station_pars()
         t.plot_gw(True, 'SRP')
 
-        ax.scatter(g.datetime, g.predicted.values, s=3, c='None',
-                   edgecolors='b', zorder=20, marker='x', label='Predicted')
+        xx = g.loc[:,'datetime'].replace(np.NaN, pd.NaT).values.astype("datetime64[D]")
+        yy = g.loc[:,'predicted']
+        ax.scatter(xx,
+                           yy,)
+        # ax.scatter(g.datetime, g.predicted.values, s=3, c='None',
+        #            edgecolors='b', zorder=20, marker='x', label='Predicted')
         ax.legend(bbox_to_anchor=(1, 1), loc='upper left')
         plt.savefig(filename, bbox_inches='tight', dpi=250)
 

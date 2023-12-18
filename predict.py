@@ -274,7 +274,7 @@ def predict_rmp_hydros(train, pred_col, basin='SRP', model=None, scaler=None, sl
     print(f'adjusting datetime by adjusting forward {dayoffset} days')
     base_df = obs.drop_duplicates(['Easting', 'Northing'])
     dfall = pd.DataFrame()
-    for year in np.arange(1975, 2023):
+    for year in np.arange(1975, 2024):
         if monthly:
             for month_ in np.arange(1, 13):
                 t = base_df.copy()
