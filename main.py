@@ -12,7 +12,7 @@ def run(basin):
     warnings.simplefilter(action='ignore', category=FutureWarning)
     warnings.simplefilter(action='ignore', category=DeprecationWarning)
 
-    filename_base = f'_v1_{basin}_allmodmonths_to_03002023'
+    filename_base = f'_v1_{basin}_allmodmonths_to_12142023'
 
     filename_base, smooth, smooth_value, modweight, add_modeled, \
     monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
@@ -24,7 +24,7 @@ def run(basin):
     reload = False
     plot_all = False
     netcdf_only = False
-    years = np.arange(1970,2023,1)
+    years = np.arange(1970,2024,1)
     # years = np.arange(2010,2022,1)
 
 
@@ -111,7 +111,7 @@ def run(basin):
     pred.export_predicted()
 
     pred.run_prediction_for_hydros()
-    pred.plot_hydros(plot_train=False)
+    pred.plot_hydros(plot_train=False,)
 
 
     gwmap = project2d.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
@@ -125,3 +125,8 @@ def run(basin):
     # gwmap = map_simple_obs.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
     #
     # gwmap.plotmap(yearstep = 1, seasons = ['Spring', 'Fall'], plot_residuals = False)
+
+if __name__ =='__main__':
+    run("SRP")
+else:
+    print(__name__)
