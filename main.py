@@ -12,7 +12,7 @@ def run(basin):
     warnings.simplefilter(action='ignore', category=FutureWarning)
     warnings.simplefilter(action='ignore', category=DeprecationWarning)
 
-    filename_base = f'_v1_{basin}_allmodmonths_to_12142023'
+    filename_base = f'_v2_{basin}_allmodmonths_to_20240123'
 
     filename_base, smooth, smooth_value, modweight, add_modeled, \
     monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
@@ -25,7 +25,7 @@ def run(basin):
     plot_all = False
     netcdf_only = False
     years = np.arange(1970,2024,1)
-    # years = np.arange(2010,2022,1)
+    # years = np.arange(2018,2024,1)
 
 
     if reload:

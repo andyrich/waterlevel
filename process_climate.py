@@ -49,9 +49,18 @@ class climate:
     def add_climate_to_obs(self, df, column = 'Date'):
         assert column in df.columns, f'{column} columns is not in df\n{df.columns}'
 
+        #filter observations that are not covered by the climate obs
+        df = df.loc[df.loc[:,column] <= self.climate_resampled.index.max(),:]
+
+        assert self.climate_resampled.isnull().sum().sum()==0
+
         initial_df = df.copy()
         f = df.shape
         df = pd.merge(df, self.climate_resampled, left_on=column, right_index=True, how = 'left')
+
+        newest_ob = df.loc[:,column].max()
+        newest_clim = self.climate_resampled.index.max()
+        assert newest_ob<=newest_clim, f'climate data needs to be updated.\ngw obs go to:\n{newest_ob}.\nclimate data to:\n{newest_clim}\n'
 
         assert df.shape[0] == f[0], 'something went wrong with join of climate data to observations'
 

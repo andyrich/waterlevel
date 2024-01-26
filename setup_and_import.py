@@ -152,9 +152,10 @@ class Krig:
         allinfo.loc[:, 'Site Number'] = allinfo.loc[:,'Site Number'].fillna('ss').str.upper()
 
         # TODO - remove basin filter
-        allinfo = allinfo[allinfo.loc[:,'Site Number'].isin(pd.Series(self.basin))]
+        # allinfo.loc[:, 'Site Number'] = allinfo.loc[:,'Site Number'].replace({"Son":'SON'})
+        # allinfo = allinfo[allinfo.loc[:,'Site Number'].isin(pd.Series(self.basin))]
 
-        # assert allinfo.shape[0]>0, 'allinfo shape is zero after filtering for basin'
+        assert allinfo.shape[0]>0, 'allinfo shape is zero after filtering for basin'
 
 
         # # add location data to wells where it is missing. use lat/lon to give easting/northing and vice versa
@@ -206,6 +207,8 @@ class Krig:
         print(f"these are the ts_shortname {maindf.ts_shortname.unique()}")
         print(f"these are the ts_type_name {maindf.ts_type_name.unique()}")
         print(f"these are the ts_type_name {maindf.ts_type_name.fillna('bad').value_counts()}")
+        print(f"\nthese are the range of data in the measurements {maindf.Timestamp.min()} "
+              f"to {maindf.Timestamp.max()}\n\n")
 
 
         all_obs = conda_scripts.utils.gwl_krig_preprocess.process_timeseries(maindf, dayoffset=self.dayoffset, freq='MS')
@@ -275,7 +278,9 @@ class Krig:
             self.climate_cols.extend( climate.climate_cols)
 
     def export_processed_ts(self):
-        self.all_obs.to_csv(os.path.join('regression_data',f'all_gw_for_surf_processed_{self.basin}.csv'))
+        proc_file = os.path.join('regression_data',f'all_gw_for_surf_processed_{self.basin}.csv')
+        print(f'exporting processed waterlevel observation data to:\n{proc_file}')
+        self.all_obs.to_csv(proc_file)
 
 
     def filter_and_export_shp(self, filt_str=None, allow_missing = True):
@@ -314,6 +319,15 @@ class Krig:
 
 
     def __extract_model_data(self, deeplayer, monthlytimestep, xysteps):
+
+        if self.check_for_modeled_export():
+            print('\n\nloading pre-extracted data for the modeled heads\n\n')
+            modheads_allinfo, modheads_stat_info_wisk, \
+            modheads_stations, modheads_all_obs = self.load_extracted_model_output()
+
+            return modheads_allinfo, modheads_stat_info_wisk, \
+                modheads_stations, modheads_all_obs
+
         if self.basin == 'SRP':
             modheads_allinfo, modheads_stat_info_wisk, \
                 modheads_stations, modheads_all_obs = load_srp_mod(dayoffset=self.dayoffset,
@@ -333,31 +347,35 @@ class Krig:
                                                                       monthlytimestep=monthlytimestep,
                                                                       xysteps=xysteps)
         elif self.basin.upper() == 'ALL_BASIN':
+            if not self.check_for_modeled_export():
+                modheads_allinfo_0, modheads_stat_info_wisk_0, \
+                    modheads_stations_0, modheads_all_obs_0 = load_srp_mod(dayoffset=self.dayoffset,
+                                                                          deeplayer = deeplayer,
+                                                                          monthlytimestep = monthlytimestep,
+                                                                          xysteps = xysteps)
+                modheads_allinfo_1, modheads_stat_info_wisk_1,\
+                    modheads_stations_1, modheads_all_obs_1 = load_son_mod(dayoffset=self.dayoffset,
+                                                                          deeplayer=deeplayer,
+                                                                          monthlytimestep=monthlytimestep,
+                                                                          xysteps=xysteps)
 
-            modheads_allinfo_0, modheads_stat_info_wisk_0, \
-                modheads_stations_0, modheads_all_obs_0 = load_srp_mod(dayoffset=self.dayoffset,
-                                                                      deeplayer = deeplayer,
-                                                                      monthlytimestep = monthlytimestep,
-                                                                      xysteps = xysteps)
-            modheads_allinfo_1, modheads_stat_info_wisk_1,\
-                modheads_stations_1, modheads_all_obs_1 = load_son_mod(dayoffset=self.dayoffset,
-                                                                      deeplayer=deeplayer,
-                                                                      monthlytimestep=monthlytimestep,
-                                                                      xysteps=xysteps)
+                modheads_allinfo, modheads_stat_info_wisk,\
+                    modheads_stations, modheads_all_obs = load_pet_mod(dayoffset=self.dayoffset,
+                                                                          deeplayer=deeplayer,
+                                                                          monthlytimestep=monthlytimestep,
+                                                                          xysteps=xysteps)
 
-            modheads_allinfo, modheads_stat_info_wisk,\
-                modheads_stations, modheads_all_obs = load_pet_mod(dayoffset=self.dayoffset,
-                                                                      deeplayer=deeplayer,
-                                                                      monthlytimestep=monthlytimestep,
-                                                                      xysteps=xysteps)
-
-            modheads_allinfo = modheads_allinfo.append(modheads_allinfo_0).append(modheads_allinfo_1)
-            modheads_stat_info_wisk = modheads_allinfo.append(modheads_stat_info_wisk_0).append(modheads_stat_info_wisk_1)
-            modheads_stations = modheads_allinfo.append(modheads_stations_0).append(modheads_stations_1)
-            modheads_all_obs = modheads_allinfo.append(modheads_all_obs_0).append(modheads_all_obs_1)
+                modheads_allinfo = modheads_allinfo.append(modheads_allinfo_0).append(modheads_allinfo_1)
+                modheads_stat_info_wisk = modheads_allinfo.append(modheads_stat_info_wisk_0).append(modheads_stat_info_wisk_1)
+                modheads_stations = modheads_allinfo.append(modheads_stations_0).append(modheads_stations_1)
+                modheads_all_obs = modheads_allinfo.append(modheads_all_obs_0).append(modheads_all_obs_1)
 
         else:
             modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs = None, None, None, None
+
+        if all([isinstance(x, pd.DataFrame) for x in [modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs]]):
+            self.export_extracted_model_output(modheads_allinfo, modheads_stat_info_wisk,\
+                modheads_stations, modheads_all_obs)
 
         if self.plot_all:
             fig = plt.figure(figsize=(5, 5), dpi=220)
@@ -367,7 +385,34 @@ class Krig:
 
         return modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs
 
+    def export_extracted_model_output(self, modheads_allinfo, modheads_stat_info_wisk,
+                modheads_stations, modheads_all_obs):
+        '''save the extracted output data for future quick importing'''
 
+        modheads_allinfo.to_pickle(os.path.join("regression_data", f"modheads_allinfo_{self.basin}.pickle"))
+        modheads_stat_info_wisk.to_pickle(os.path.join("regression_data", f"modheads_stat_info_wisk_{self.basin}.pickle"))
+        modheads_stations.to_pickle(os.path.join("regression_data", f"modheads_stations_{self.basin}.pickle"))
+        modheads_all_obs.to_pickle(os.path.join("regression_data", f"modheads_all_obs_{self.basin}.pickle"))
+
+
+    def load_extracted_model_output(self):
+        '''load the extracted data output from models because it's time consuming
+        '''
+        modheads_allinfo = pd.read_pickle(os.path.join("regression_data", f"modheads_allinfo_{self.basin}.pickle"))
+        modheads_stat_info_wisk = pd.read_pickle(
+            os.path.join("regression_data", f"modheads_stat_info_wisk_{self.basin}.pickle"))
+        modheads_stations = pd.read_pickle(os.path.join("regression_data", f"modheads_stations_{self.basin}.pickle"))
+        modheads_all_obs = pd.read_pickle(os.path.join("regression_data", f"modheads_all_obs_{self.basin}.pickle"))
+
+        return modheads_allinfo, modheads_stat_info_wisk, modheads_stations, modheads_all_obs
+
+    def check_for_modeled_export(self):
+        files = [os.path.join("regression_data", f"modheads_allinfo_{self.basin}.pickle"),
+                os.path.join("regression_data", f"modheads_stat_info_wisk_{self.basin}.pickle"),
+                os.path.join("regression_data", f"modheads_stations_{self.basin}.pickle"),
+                os.path.join("regression_data", f"modheads_all_obs_{self.basin}.pickle")]
+
+        return all([os.path.exists(x) for x in files])
 
     def add_krig_values(self):
         # keep observed elevations of observations (do not use DEM values)

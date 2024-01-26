@@ -34,15 +34,7 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
                                              inepsg='epsg:2226', outepsg='epsg:4326')
 
         nwp.do_plot(close_plot=False, input_long_lat=input_long_lat,plot_wet =False,seasonal = False, plot_dry= False,)
-        print(g)
-        print(g.dtypes)
-        print(g.datetime)
-        print(g.predicted)
-        print(g.isnull().sum())
-        # fig, ax = plt.subplots(1,1)
-        # ax.scatter(g.datetime,
-        #                    g.predicted.astype(float).values)
-        # plt.show()
+
         xx = g.loc[:,'datetime'].replace(np.NaN, pd.NaT).values.astype("datetime64[D]")
         yy = g.loc[:,'predicted']
 
@@ -51,12 +43,6 @@ def plot_rmp_hydro_pred(modelname, rmp_hydro, fancy=False, skip=True, errors_kee
                            s=10, c='None',
                            edgecolors='b', zorder=20,
                            marker='o', label='Predicted')
-
-        # nwp.upleft.scatter(g.datetime,
-        #                    g.predicted.astype(float).values,
-        #                    s=10, c='None',
-        #                    edgecolors='b', zorder=20,
-        #                    marker='.', label='Predicted')
 
         if observed is None:
             pass

@@ -21,8 +21,8 @@ def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
         add_temp = True
         add_climate = True
         filter_manual = True
-        obs_filename = 'all_gw_for_surf_2022.csv'
-        obs_filename = 'all_gw_for_surf_2023_12_14.csv'
+        # obs_filename = 'all_gw_for_surf_2022.csv'
+        obs_filename = 'all_gw_for_surf_2024_01_23.csv'
 
 
     elif basin.upper() == "PET":
@@ -43,7 +43,7 @@ def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
         add_climate = True
         filter_manual = True
         # obs_filename = 'all_gw_for_surf_2022.csv'
-        obs_filename = 'all_gw_for_surf_2023_12_14.csv'
+        obs_filename = 'all_gw_for_surf_2024_01_23.csv'
 
     elif basin.upper() == 'SON' or basin.upper() == 'SV':
         if filename_base is None:
@@ -65,7 +65,7 @@ def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
         add_climate = True
         filter_manual = True
         # obs_filename = 'all_gw_for_surf_2022.csv'
-        obs_filename = 'all_gw_for_surf_2023_12_14.csv'
+        obs_filename = 'all_gw_for_surf_2024_01_23.csv'
     else:
         raise ValueError('Enter correct basin name: SRP, PET, SON')
 
