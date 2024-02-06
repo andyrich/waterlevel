@@ -17,6 +17,8 @@ plt.rcParams['figure.figsize'] = (6, 8)
 import post_process as pp
 import rioxarray as rx
 from matplotlib.colors import TwoSlopeNorm
+import fig_setup
+fig_setup.set_pub()
 
 def plot_year(basin, year, depth, season, figure_num, datafolder, out_folder,title = None):
 
@@ -78,14 +80,33 @@ def plot_year(basin, year, depth, season, figure_num, datafolder, out_folder,tit
     cbar_kwargs = {'orientation': 'vertical', 'shrink': 1.0,  'label': 'Waterlevel Elevation (feet)',
                    'cax': cbar}
 
-    gw.where(np.flipud(mask.values)).isel(band=0).plot.contourf(ax=ax,
-                                                                alpha=.8, extend='both', levels=levels, cmap='RdYlBu',
-                                                                cbar_kwargs=cbar_kwargs,
-                                                                norm=TwoSlopeNorm(vmin=levels.min(), vcenter=0,
-                                                                                  vmax=levels.max() ))
+    #without doing via low-level mpl, not all contours were being shown.
+    x, y = np.meshgrid(gw.where(np.flipud(mask.values)).isel(band=0).x, gw.where(np.flipud(mask.values)).isel(band=0).y)
+    z = gw.where(np.flipud(mask.values)).isel(band=0).values
+    CS3 = ax.contourf(x, y, z, levels, cmap='RdYlBu', extend='both', alpha = 0.8,
+                      norm=TwoSlopeNorm(vmin=levels.min(), vcenter=0,
+                                                    vmax=levels.max()) )
+
+    fig.colorbar(CS3, **cbar_kwargs )
+
+    # gw.where(np.flipud(mask.values)).isel(band=0).plot.contourf(ax=ax,
+    #                                                             alpha=.8, extend='both', levels=levels, cmap='RdYlBu',
+    #                                                             cbar_kwargs=cbar_kwargs,
+    #                                                             norm=TwoSlopeNorm(vmin=levels.min(), vcenter=0,
+    #                                                                               vmax=levels.max() ))
 
 
-    cnt20.loc[~cnt20.loc[:,'elev'].astype(int).isin(np.arange(-1000,1000,100))].plot(ax=ax, lw=linewidths_minr, ls=cntr_minr_style, color=cntr_minr_col)
+    # cnt20.loc[~cnt20.loc[:,'elev'].astype(int).isin(np.arange(-1000,1000,100))].plot(ax=ax, lw=linewidths_minr, ls=cntr_minr_style, color=cntr_minr_col)
+
+    # contour 20ft levels
+    cntr_20ft_levels = [x for x in levels if x not in np.arange(-1000,1000,100)]
+    gw.where(np.flipud(mask.values)).isel(band=0).plot.contour(levels= cntr_20ft_levels,
+                                                                    ax = ax,
+                                                                    linewidths=linewidths_minr,
+                                                                    linestyle = cntr_minr_style,
+                                                                    colors=cntr_minr_col)
+
+    #contour 100 foot levels
     CS = gw.where(np.flipud(mask.values)).isel(band=0).plot.contour(levels=[-200, -100,0, 100, 200],
                                                                     ax = ax,
                                                                     linewidths=linewidths,
@@ -98,10 +119,7 @@ def plot_year(basin, year, depth, season, figure_num, datafolder, out_folder,tit
     obs.plot(ax=ax, edgecolor='w', markersize=15, facecolor = 'purple')
     col2plot = 'label'
     already_str = True
-    # label_points(ax, obs, col2plot,
-    #              basin_name=[basin.upper()],
-    #              buffer=2000, limit=5, already_str=already_str,
-    #              )
+
     conda_scripts.plot_help.label_points(
         ax, obs, col2plot,
         basin_name=[basin.upper()],
@@ -123,11 +141,12 @@ def plot_year(basin, year, depth, season, figure_num, datafolder, out_folder,tit
     conda_scripts.arich_functions.add_basemaps(ax,maptype='ctx.Esri.NatGeoWorldMap',)
     conda_scripts.arich_functions.add_basemap_transpo(ax=ax)
     conda_scripts.arich_functions.add_basemap_placenames(ax = ax)
+    conda_scripts.rich_gis.plot_eastside_fault(ax = ax)
     # conda_scripts.arich_functions.add_basemaps(ax, 'transpo', zorder = 10, wms_kwargs = {"zoom":8,'transparent':True})
     # conda_scripts.arich_functions.add_basemaps(ax, 'street_map', zorder = 10)
 
     conda_scripts.rich_gis.plot_water_shed(ax = ax, cur_basin=basin, edgecolor=wshed_color)
-    ax.set_title(title, fontsize=12)
+    ax.set_title('', fontsize=12)
 
     hand = ph.add_marker_to_legend(axlegend, handles=None, color=cntr_majr_col,
                                    marker=None, linestyle=cntr_majr_style,
@@ -149,7 +168,7 @@ def plot_year(basin, year, depth, season, figure_num, datafolder, out_folder,tit
                                    marker=None, linestyle='-',
                                    label='Basin Watershed')
 
-    axlegend.legend(handles=hand, loc='lower left',  bbox_to_anchor=(0, 0), fontsize=10,mode = 'expand', edgecolor = None)
+    axlegend.legend(handles=hand, loc='lower left',  bbox_to_anchor=(.0, .0), fontsize=10,mode = 'expand', edgecolor = None)
     plt.savefig(os.path.join(out_folder, f'{figure_num} WL map {depth}_{season}.png'), dpi=250)
     plt.close()
 
@@ -174,12 +193,10 @@ def plot_year_diff(basin, year, depth, season, figure_num, datafolder, out_folde
     basshp = basshp.loc[[basin.upper()], :]
 
     path = os.path.join(datafolder, f"wl_change_predictions_{depth}_{season}.netcdf")
-    print(path)
     wlmap = xr.open_dataset(path)
 
     print(f"opening the following with rioxarray\n{path+'.tif'}")
-    # gw = xr.open_rasterio(path + '.tif')
-    # gw = rx.open_rasterio(path+'.tif')
+
 
     if title is None:
         title = f"Waterlevel Changes from {year-1} to {year}, {depth.capitalize()} Aquifer, {season.capitalize()}"
@@ -220,70 +237,17 @@ def plot_year_diff(basin, year, depth, season, figure_num, datafolder, out_folde
                                          cbar_kwargs)
     c.where(mask).Head.plot.contour(ax=ax, color='k', colors='k', linewidths=.5, linestyles='solid', levels=levels)
 
-    # gw.where(np.flipud(mask.values)).isel(band=0).plot.contourf(ax=ax,
-    #                                                             alpha=.8, extend='both', levels=levels, cmap='RdYlBu',
-    #                                                             cbar_kwargs=cbar_kwargs,
-    #                                                             norm=TwoSlopeNorm(vmin=levels.min(), vcenter=0,
-    #                                                                               vmax=levels.max() ))
-    #
-    #
-    # cnt20.loc[~cnt20.loc[:,'elev'].astype(int).isin(np.arange(-1000,1000,100))].plot(ax=ax, lw=linewidths_minr, ls=cntr_minr_style, color=cntr_minr_col)
 
-    # CS = c.where(np.flipud(mask.values)).Head.plot.contour(levels=[-20, -10,0, 10, 20],
-    #                                                                 ax = ax,
-    #                                                                 linewidths=linewidths,
-    #                                                                 linestyle = cntr_majr_style,
-    #                                                                 colors=cntr_majr_col)
-    #
-    # obs.loc[:, 'label'] = obs.apply(
-    #     lambda x: "{:.0f}".format(x['Observations']), axis=1)
-    #
-    # obs.plot(ax=ax, edgecolor='w', markersize=15, facecolor = 'purple')
-    # col2plot = 'label'
-    # already_str = True
-    # label_points(ax, obs, col2plot,
-    #              basin_name=[basin.upper()],
-    #              buffer=2000, limit=5, already_str=already_str,
-    #              )
-    # conda_scripts.plot_help.label_points(
-    #     ax, obs, col2plot,
-    #     basin_name=[basin.upper()],
-    #     already_str=already_str,
-    #     kwds_dict={'x': obs.geometry.x.values, 'y': obs.geometry.y.values,
-    #            # 'avoid_self': False,
-    #                'expand_text': (4, 4), 'expand_points': (1.6, 1.6),
-    #            "force_points": (1., 1.)
-    #            },
-    # )
-    #
-    # def fmt(x):
-    #     s = f"{int(x):1d}ft"
-    #     return s
-    #
-    # ax.clabel(CS, CS.levels, inline=True, fmt=fmt, fontsize=8, colors='k')
-
-    # ctx.add_basemap(ax, source="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", crs=2226)
+    # add background maps
     conda_scripts.arich_functions.add_basemaps(ax,maptype='ctx.Esri.NatGeoWorldMap',)
     conda_scripts.arich_functions.add_basemap_transpo(ax=ax)
     conda_scripts.arich_functions.add_basemap_placenames(ax = ax)
-    # conda_scripts.arich_functions.add_basemaps(ax, 'transpo', zorder = 10, wms_kwargs = {"zoom":8,'transparent':True})
-    # conda_scripts.arich_functions.add_basemaps(ax, 'street_map', zorder = 10)
+    conda_scripts.rich_gis.plot_eastside_fault(ax=ax)
 
     conda_scripts.rich_gis.plot_water_shed(ax = ax, cur_basin=basin, edgecolor=wshed_color)
-    ax.set_title(title, fontsize=12)
+    ax.set_title('', fontsize=12)
     hand  = None
 
-    # hand = ph.add_marker_to_legend(axlegend, handles=None, color=cntr_majr_col,
-    #                                marker=None, linestyle=cntr_majr_style,
-    #                                label='Groundwater Contour (100 ft)')
-    #
-    # hand = ph.add_marker_to_legend(axlegend, handles=hand, color=cntr_minr_col,
-    #                                marker=None, linestyle=cntr_minr_style,
-    #                                label='Groundwater Contour (20 ft)')
-    #
-    # hand = ph.add_marker_to_legend(axlegend, color='purple', handles=hand, markersize=2,
-    #                                marker='o', linestyle='',
-    #                                label='Observed\nGroundwater\nElevation (ft)')
 
     hand = ph.add_marker_to_legend(axlegend, handles=hand, color='b',
                                    marker=None, linestyle='-',
@@ -293,8 +257,8 @@ def plot_year_diff(basin, year, depth, season, figure_num, datafolder, out_folde
                                    marker=None, linestyle='-',
                                    label='Basin Watershed')
 
-    axlegend.legend(handles=hand, loc='lower left',  bbox_to_anchor=(0, 0), fontsize=10,mode = 'expand', edgecolor = None)
-    plt.savefig(os.path.join(out_folder, f'{figure_num} WL map {depth}_{season}.png'), dpi=250)
+    axlegend.legend(handles=hand, loc='center',  bbox_to_anchor=(.5, .5), fontsize=10,mode = 'expand', edgecolor = None)
+    plt.savefig(os.path.join(out_folder, f'{figure_num} WL change {depth}_{season}.png'), dpi=250)
     plt.close()
 
 def plot_year_storage_change(basin, year, depth, season, figure_num, datafolder, out_folder,mod = None, title = None):
@@ -338,23 +302,15 @@ def plot_year_storage_change(basin, year, depth, season, figure_num, datafolder,
     conda_scripts.rich_gis.set_extent(ax, locname=basin, keep_init_axis_ratio=True)
 
     if depth.upper() == 'DEEP':
-        levels = np.linspace(-.0075, .0075, 7)
+        levels = np.linspace(-.007, .007, 8)
         # fig = plt.figure(figsize=(6, 8), dpi=250)
     else:
-        levels = np.linspace(-.6, .6, 7)
+        levels = np.linspace(-.7, .7, 8)
         # fig = plt.figure(figsize=(8, 6), dpi=250)
 
 
     basshp.plot(ax=ax, facecolor="None", edgecolor='b', zorder = 500)
 
-    mask = pp.get_mask(basin)
-
-    linewidths = .5
-    linewidths_minr = .5
-    cntr_minr_col = 'darkgrey'
-    cntr_majr_col = 'black'
-    cntr_minr_style = '-'
-    cntr_majr_style = '-'
     wshed_color = 'grey'
 
 
@@ -371,10 +327,10 @@ def plot_year_storage_change(basin, year, depth, season, figure_num, datafolder,
     conda_scripts.arich_functions.add_basemaps(ax,maptype='ctx.Esri.NatGeoWorldMap',)
     conda_scripts.arich_functions.add_basemap_transpo(ax=ax)
     conda_scripts.arich_functions.add_basemap_placenames(ax = ax)
-
+    conda_scripts.rich_gis.plot_eastside_fault(ax=ax)
 
     conda_scripts.rich_gis.plot_water_shed(ax = ax, cur_basin=basin, edgecolor=wshed_color)
-    ax.set_title(title, fontsize=12)
+    ax.set_title('', fontsize=12)
     hand  = None
 
     hand = ph.add_marker_to_legend(axlegend, handles=hand, color='b',
@@ -385,8 +341,8 @@ def plot_year_storage_change(basin, year, depth, season, figure_num, datafolder,
                                    marker=None, linestyle='-',
                                    label='Basin Watershed')
 
-    axlegend.legend(handles=hand, loc='lower left',  bbox_to_anchor=(0, 0), fontsize=10,mode = 'expand', edgecolor = None)
-    plt.savefig(os.path.join(out_folder, f'{figure_num} WL change stor {depth}_{season}.png'), dpi=250)
+    axlegend.legend(handles=hand, loc='center',  bbox_to_anchor=(.5, .5), fontsize=10,mode = 'expand', edgecolor = None)
+    plt.savefig(os.path.join(out_folder, f'{figure_num} storage_change {depth}_{season}.png'), dpi=250)
     plt.close()
 
 
@@ -407,7 +363,7 @@ def run_waterlevel(year = None):
                       'Shallow':{'Spring':"Figure 3-3",'Fall':"Figure 3-4",}},
                'srp':{'Deep':{'Spring':"Figure 3-5",'Fall':"Figure 3-6",},
                       'Shallow':{'Spring':"Figure 3-3",'Fall':"Figure 3-4",}},
-              'pet':{'Deep':{'Spring':"Figure 3-5",'Fall':"Figure 3-6",},
+              'pet':{'Deep':{'Spring':"erase",'Fall':"erase",},
                       'Shallow':{'Spring':"Figure 3-3",'Fall':"Figure 3-4", }}}
 
     fig_title = {'son':{'Deep':{'Spring':None,'Fall':None,},
@@ -427,10 +383,10 @@ def run_waterlevel(year = None):
             for season in ('Fall', 'Spring')]
 
 def run_waterlevel_change(year):
-    fignums = {'SON': {'SON': {'Fall': "Figure 3-7", },
-                       'Shallow': {'Fall': "Figure 3-8", }},
-               'SRP': {'Deep': {'Fall': "Figure 3-7", },
-                       'Shallow': {'Fall': "Figure 3-8", }},
+    fignums = {'SON': {'Deep': {'Fall': "Figure 3-8", },
+                       'Shallow': {'Fall': "Figure 3-7", }},
+               'SRP': {'Deep': {'Fall': "Figure 3-8", },
+                       'Shallow': {'Fall': "Figure 3-7", }},
                'PET': {'Deep': {'Fall': "erase", },
                        'Shallow': {'Fall': "Figure 3-5", }}}
 
@@ -485,7 +441,7 @@ def run_storage_change(year):
 
 if __name__ == '__main__':
     # run_waterlevel(year = 2023)
-    # run_storage_change(2023)
+    run_storage_change(2023)
     run_waterlevel_change(2023)
 
     # shallow = 'Shallow'

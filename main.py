@@ -12,7 +12,7 @@ def run(basin):
     warnings.simplefilter(action='ignore', category=FutureWarning)
     warnings.simplefilter(action='ignore', category=DeprecationWarning)
 
-    filename_base = f'_v2_{basin}_allmodmonths_to_20240123'
+    filename_base = f'_v3_{basin}_allmodmonths_to_20240205'
 
     filename_base, smooth, smooth_value, modweight, add_modeled, \
     monthlytimestep, modeltype, nmonths, dayoffset,scale_data, \
@@ -21,9 +21,9 @@ def run(basin):
 
 
 
-    reload = False
+    reload = True
     plot_all = False
-    netcdf_only = False
+    netcdf_only = True
     years = np.arange(1970,2024,1)
     # years = np.arange(2018,2024,1)
 
@@ -116,7 +116,7 @@ def run(basin):
 
     gwmap = project2d.MapGW(pred,krigobj, smooth = smooth, smooth_value = smooth_value)
 
-    gwmap.plotmap(yearstep = years, seasons = ['Spring', 'Fall'],
+    gwmap.plotmap(yearstep = years, seasons = ['Fall', 'Spring', ],
                   plot_residuals = True, netcdf_only=netcdf_only)
 
 
