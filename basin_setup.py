@@ -10,7 +10,7 @@ def basin_info(filename_base = None,basin = 'SRP', experiment_number = 1,):
         # smooth_value = {'SRP':.25,'SON':.5}[basin]
         # modweight=.05
         modweight = .25
-        add_modeled = False
+        add_modeled = True
         nmonths = 120
         modeltype = 'regress_only'
         monthlytimestep = 1

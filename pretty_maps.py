@@ -440,7 +440,7 @@ def run_storage_change(year):
 
 
 if __name__ == '__main__':
-    # run_waterlevel(year = 2023)
+    run_waterlevel(year = 2023)
     run_storage_change(2023)
     run_waterlevel_change(2023)
 

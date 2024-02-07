@@ -23,7 +23,7 @@ def run(basin):
 
     reload = True
     plot_all = False
-    netcdf_only = True
+    netcdf_only = False
     years = np.arange(1970,2024,1)
     # years = np.arange(2018,2024,1)
 

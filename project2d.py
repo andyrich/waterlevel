@@ -108,9 +108,7 @@ class MapGW:
                             print('skipping plotting and only saving netcdf outputs')
                             continue
 
-                        ax = first.map_it(calc=True,
-                                          plot_points=True,
-                                          contours=contours,
+                        ax = first.map_it(contours=contours,
                                           crs=ccrs.epsg(2226),
                                           label_contour=True,
                                           locname=bas + "_MOD")
@@ -171,7 +169,7 @@ class MapGW:
 
                             label_points(ax, seas_gdf, col2plot,
                                          basin_name=[bas.upper()],
-                                         buffer=2000, limit=5, already_str=already_str)
+                                         buffer=2000, limit=1, already_str=already_str)
 
                             seas_gdf.to_file(filename.replace('.png', '.shp'))
 
@@ -292,7 +290,7 @@ class PlotContour(object):
 
         self.x_stp, self.y_stp = dfgrid.columns.values, dfgrid.index.values
 
-    def map_it(self, calc=True, plot_points=True,
+    def map_it(self,
                contours=(0, 10, 20, 30, 40), locname="PV",
                label_contour=True, crs=ccrs.epsg(3857),
                maptype='ctx.OpenStreetMap.Mapnik'):
